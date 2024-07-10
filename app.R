@@ -124,54 +124,65 @@ server <- function(input, output, session) {
     # Calculate the predicted VO2 max values using the specified equations
     VO2_Predicted <- VO2_Predicted %>%
       mutate(
-        VO2_peak_Friend_general = case_when(
-          gender == "Male" & Mode == "Bike" ~ (45.2 - (0.35 * age) - (10.9 * 1) - (0.15 * weight_lbs) + (0.68 * height_in) - (0.46 * 2)) * weight_kg,
-          gender == "Female" & Mode == "Bike" ~ (45.2 - (0.35 * age) - (10.9 * 2) - (0.15 * weight_lbs) + (0.68 * height_in) - (0.46 * 2)) * weight_kg,
-          gender == "Male" & Mode == "Treadmill" ~ (45.2 - (0.35 * age) - (10.9 * 1) - (0.15 * weight_lbs) + (0.68 * height_in) - (0.46 * 1)) * weight_kg,
-          gender == "Female" & Mode == "Treadmill" ~ (45.2 - (0.35 * age) - (10.9 * 2) - (0.15 * weight_lbs) + (0.68 * height_in) - (0.46 * 1)) * weight_kg,
-          TRUE ~ NA_real_),
-        
-        
-        VO2_peak_wasserman = case_when(
-          gender == "Male" ~ (weight_kg * (50.72 - (0.372 * age))), 
-          gender == "Female" ~ (weight_kg + 42.8) * (22.78 - (0.17 * age)),
-          TRUE ~ NA_real_),
-        
-        
-        VO2_peak_Hansen = case_when(
-          gender == "Male" & Mode == "Bike" & weight_kg < weight_ideal ~ (((weight_ideal + weight_kg) / 2) * cycle_factor),
-          gender == "Male" & Mode == "Bike" & weight_kg == weight_ideal ~ (weight_kg * cycle_factor),
-          gender == "Male" & Mode == "Bike" & weight_kg > weight_ideal ~ ((weight_ideal * cycle_factor) + 6 * (weight_kg - weight_ideal)),
-          
-          gender == "Male" & Mode == "Treadmill" & weight_kg < weight_ideal ~ (((weight_ideal + weight_kg) / 2) * cycle_factor) * 1.11,
-          gender == "Male" & Mode == "Treadmill" & weight_kg == weight_ideal ~ (weight_kg * cycle_factor) * 1.11,
-          gender == "Male" & Mode == "Treadmill" & weight_kg > weight_ideal ~ ((weight_ideal * cycle_factor) + 6 * (weight_kg - weight_ideal)) * 1.11,
-          
-          gender == "Female" & Mode == "Bike" & weight_kg < weight_ideal ~ (((weight_ideal + weight_kg + 86) / 2) * cycle_factor),
-          gender == "Female" & Mode == "Bike" & weight_kg == weight_ideal ~ ((weight_kg + 43) * cycle_factor),
-          gender == "Female" & Mode == "Bike" & weight_kg > weight_ideal ~ (((weight_ideal + 43) * cycle_factor) + 6 * (weight_kg - weight_ideal)),
-          
-          gender == "Female" & Mode == "Treadmill" & weight_kg < weight_ideal ~ (((weight_ideal + weight_kg + 86) / 2) * cycle_factor) * 1.11,
-          gender == "Female" & Mode == "Treadmill" & weight_kg == weight_ideal ~ ((weight_kg + 43) * cycle_factor) * 1.11,
-          gender == "Female" & Mode == "Treadmill" & weight_kg > weight_ideal ~ (((weight_ideal + 43) * cycle_factor) + 6 * (weight_kg - weight_ideal)) * 1.11,
-          TRUE ~ NA_real_),
-        
-        
-        VO2_peak_Bruce = case_when(
-          gender == "Male" ~ ((60 - (0.55* age)) * (weight_kg)), 
-          gender == "Female" ~ ((48 - (0.37 * age)) * (weight_kg)),
-          TRUE ~ NA_real_),
-        
-        VO2_peak_Jones2 = case_when(
-          gender == "Male" ~ (-3.76 + 0.034 * height_cm + 0.022 * weight_kg - 0.028 * age) * 1000, 
-          gender == "Female" ~ (-2.26 + 0.025 * height_cm + 0.01 * weight_kg - 0.018 * age) * 1000,
-          TRUE ~ NA_real_),
-        
-        VO2_peak_Neder = case_when(
-          gender == "Male" ~ ((-24.3 * age) + (10.2 * weight_kg) + (8.3 * height_cm) + 1125), 
-          gender == "Female" ~ ((-13.7 * age) + (10.2 * weight_kg) + (8.3 * height_cm) + 60),
-          TRUE ~ NA_real_)
-      )
+        VO2_Predicted <- VO2_Predicted %>%
+          mutate(
+            VO2_peak_Friend_general = case_when(
+              gender == "Male" & Mode == "Bike" ~ (45.2 - (0.35 * age) - (10.9 * 1) - (0.15 * weight_lbs) + (0.68 * height_in) - (0.46 * 2)) * weight_kg,
+              gender == "Female" & Mode == "Bike" ~ (45.2 - (0.35 * age) - (10.9 * 2) - (0.15 * weight_lbs) + (0.68 * height_in) - (0.46 * 2)) * weight_kg,
+              gender == "Male" & Mode == "Treadmill" ~ (45.2 - (0.35 * age) - (10.9 * 1) - (0.15 * weight_lbs) + (0.68 * height_in) - (0.46 * 1)) * weight_kg,
+              gender == "Female" & Mode == "Treadmill" ~ (45.2 - (0.35 * age) - (10.9 * 2) - (0.15 * weight_lbs) + (0.68 * height_in) - (0.46 * 1)) * weight_kg,
+              TRUE ~ NA_real_),
+            
+            
+            VO2_peak_wasserman = case_when(
+              gender == "Male" & Mode == "Treadmill" ~ ((weight_kg * (50.72 - (0.372 * age))) * 1.11), 
+              gender == "Female" & Mode == "Treadmill" ~ (((weight_kg + 42.8) * (22.78 - (0.17 * age))) * 1.11),
+              gender == "Male" & Mode == "Bike" ~ (weight_kg * (50.72 - (0.372 * age))), 
+              gender == "Female" & Mode == "Bike" ~ ((weight_kg + 42.8) * (22.78 - (0.17 * age))),
+              TRUE ~ NA_real_),
+            
+            
+            VO2_peak_Hansen = case_when(
+              gender == "Male" & Mode == "Bike" & weight_kg < weight_ideal ~ (((weight_ideal + weight_kg) / 2) * cycle_factor),
+              gender == "Male" & Mode == "Bike" & weight_kg == weight_ideal ~ (weight_kg * cycle_factor),
+              gender == "Male" & Mode == "Bike" & weight_kg > weight_ideal ~ ((weight_ideal * cycle_factor) + 6 * (weight_kg - weight_ideal)),
+              
+              gender == "Male" & Mode == "Treadmill" & weight_kg < weight_ideal ~ (((weight_ideal + weight_kg) / 2) * cycle_factor) * 1.11,
+              gender == "Male" & Mode == "Treadmill" & weight_kg == weight_ideal ~ (weight_kg * cycle_factor) * 1.11,
+              gender == "Male" & Mode == "Treadmill" & weight_kg > weight_ideal ~ ((weight_ideal * cycle_factor) + 6 * (weight_kg - weight_ideal)) * 1.11,
+              
+              gender == "Female" & Mode == "Bike" & weight_kg < weight_ideal ~ (((weight_ideal + weight_kg + 86) / 2) * cycle_factor),
+              gender == "Female" & Mode == "Bike" & weight_kg == weight_ideal ~ ((weight_kg + 43) * cycle_factor),
+              gender == "Female" & Mode == "Bike" & weight_kg > weight_ideal ~ (((weight_ideal + 43) * cycle_factor) + 6 * (weight_kg - weight_ideal)),
+              
+              gender == "Female" & Mode == "Treadmill" & weight_kg < weight_ideal ~ (((weight_ideal + weight_kg + 86) / 2) * cycle_factor) * 1.11,
+              gender == "Female" & Mode == "Treadmill" & weight_kg == weight_ideal ~ ((weight_kg + 43) * cycle_factor) * 1.11,
+              gender == "Female" & Mode == "Treadmill" & weight_kg > weight_ideal ~ (((weight_ideal + 43) * cycle_factor) + 6 * (weight_kg - weight_ideal)) * 1.11,
+              TRUE ~ NA_real_),
+            
+            
+            VO2_peak_Bruce = case_when(
+              gender == "Male" & Mode == "Treadmill" ~ ((60 - (0.55* age)) * (weight_kg)), 
+              gender == "Female" & Mode == "Treadmill" ~ ((48 - (0.37 * age)) * (weight_kg)),
+              gender == "Male" & Mode == "Bike" ~ (((60 - (0.55* age)) * (weight_kg)) * 0.89), 
+              gender == "Female" & Mode == "Bike" ~ (((48 - (0.37 * age)) * (weight_kg)) * 0.89),
+              TRUE ~ NA_real_),
+            
+            VO2_peak_Jones2 = case_when(
+              gender == "Male" & Mode == "Bike" ~ (-3.76 + 0.034 * height_cm + 0.022 * weight_kg - 0.028 * age) * 1000, 
+              gender == "Female" & Mode == "Bike" ~ (-2.26 + 0.025 * height_cm + 0.01 * weight_kg - 0.018 * age) * 1000,
+              gender == "Male" & Mode == "Treadmill" ~ (((-3.76 + 0.034 * height_cm + 0.022 * weight_kg - 0.028 * age) * 1000) * 1.11), 
+              gender == "Female" & Mode == "Treadmill" ~ (((-2.26 + 0.025 * height_cm + 0.01 * weight_kg - 0.018 * age) * 1000) * 1.11),
+              TRUE ~ NA_real_),
+            
+            VO2_peak_Neder = case_when(
+              gender == "Male" & Mode == "Bike" ~ ((-24.3 * age) + (10.2 * weight_kg) + (8.3 * height_cm) + 1125), 
+              gender == "Female" & Mode == "Bike" ~ ((-13.7 * age) + (10.2 * weight_kg) + (8.3 * height_cm) + 60),
+              gender == "Male" & Mode == "Treadmill" ~ ((((-24.3 * age) + (10.2 * weight_kg) + (8.3 * height_cm) + 1125)) * 1.11), 
+              gender == "Female" & Mode == "Treadmill" ~ ((((-13.7 * age) + (10.2 * weight_kg) + (8.3 * height_cm) + 60)) * 1.11),
+              TRUE ~ NA_real_)
+          ))
+      
     
     VO2_Predicted <- VO2_Predicted %>% 
       mutate(
@@ -262,6 +273,7 @@ server <- function(input, output, session) {
       )
     
     # Calculate the predicted VO2 max values using the specified equations
+    # no correction needed 
     VO2_Predicted_tableFRIEND <- VO2_Predicted_tableFRIEND %>%
       mutate(
         VO2_peak_Friend_general = case_when(
@@ -303,11 +315,14 @@ server <- function(input, output, session) {
     
     
     # Calculate the predicted VO2 max values using the specified equations
+    # needs to be corrected for Mode (* 1.11)
     VO2_Predicted_tableWasserman <- VO2_Predicted_tableWasserman %>%
       mutate(
         VO2_peak_wasserman = case_when(
-          gender == "Male" ~ (weight_kg * (50.72 - (0.372 * age))), 
-          gender == "Female" ~ (weight_kg + 42.8) * (22.78 - (0.17 * age)),
+          gender == "Male" & Mode == "Treadmill" ~ ((weight_kg * (50.72 - (0.372 * age))) * 1.11), 
+          gender == "Female" & Mode == "Treadmill" ~ ((weight_kg + 42.8) * (22.78 - (0.17 * age)) * 1.11),
+          gender == "Male" & Mode == "Bike" ~ (weight_kg * (50.72 - (0.372 * age))), 
+          gender == "Female" & Mode == "Bike" ~ (weight_kg + 42.8) * (22.78 - (0.17 * age)),
           TRUE ~ NA_real_))
     
     VO2_Predicted_tableWasserman <- VO2_Predicted_tableWasserman %>%
@@ -409,11 +424,14 @@ server <- function(input, output, session) {
     
     
     # Calculate the predicted VO2 max values using the specified equations
+    # needs to corrected for mode (*0.89 for bike)
     VO2_Predicted_tableBruce <- VO2_Predicted_tableBruce %>%
       mutate(
         VO2_peak_Bruce = case_when(
-          gender == "Male" ~ ((60 - (0.55* age)) * (weight_kg)), 
-          gender == "Female" ~ ((48 - (0.37 * age)) * (weight_kg)),
+          gender == "Male" & Mode == "Treadmill" ~ ((60 - (0.55* age)) * (weight_kg)), 
+          gender == "Female" & Mode == "Treadmill" ~ ((48 - (0.37 * age)) * (weight_kg)),
+          gender == "Male" & Mode == "Bike" ~ (((60 - (0.55* age)) * (weight_kg)) * 0.89), 
+          gender == "Female" & Mode == "Bike" ~ (((48 - (0.37 * age)) * (weight_kg)) * 0.89),
           TRUE ~ NA_real_))
     
     
@@ -449,11 +467,14 @@ server <- function(input, output, session) {
     
     
     # Calculate the predicted VO2 max values using the specified equations
+    # needs to be corrected, (* 1.11)
     VO2_Predicted_tableJones2 <- VO2_Predicted_tableJones2 %>%
       mutate(
         VO2_peak_Jones2 = case_when(
-          gender == "Male" ~ (-3.76 + 0.034 * height_cm + 0.022 * weight_kg - 0.028 * age) * 1000, 
-          gender == "Female" ~ (-2.26 + 0.025 * height_cm + 0.01 * weight_kg - 0.018 * age) * 1000,
+          gender == "Male" & Mode == "Treadmill" ~ (((-3.76 + 0.034 * height_cm + 0.022 * weight_kg - 0.028 * age) * 1000) * 1.11), 
+          gender == "Female" & Mode == "Treadmill" ~ (((-2.26 + 0.025 * height_cm + 0.01 * weight_kg - 0.018 * age) * 1000) * 1.11),
+          gender == "Male" & Mode == "Bike" ~ (-3.76 + 0.034 * height_cm + 0.022 * weight_kg - 0.028 * age) * 1000, 
+          gender == "Female" & Mode == "Bike" ~ (-2.26 + 0.025 * height_cm + 0.01 * weight_kg - 0.018 * age) * 1000,
           TRUE ~ NA_real_))
     
     
@@ -504,11 +525,14 @@ server <- function(input, output, session) {
       )
     
     # Calculate the predicted VO2 max values using the specified equations
+    # need to correct for mode. (* 1.11)
     VO2_Predicted_tableNeder <- VO2_Predicted_tableNeder %>%
       mutate(
         VO2_peak_Neder= case_when(
-            gender == "Male" ~ ((-24.3 * age) + (10.2 * weight_kg) + (8.3 * height_cm) + 1125), 
-            gender == "Female" ~ ((-13.7 * age) + (10.2 * weight_kg) + (8.3 * height_cm) + 60),
+            gender == "Male" & Mode == "Treadmill" ~ (((-24.3 * age) + (10.2 * weight_kg) + (8.3 * height_cm) + 1125) * 1.11), 
+            gender == "Female" & Mode == "Treadmill" ~ (((-13.7 * age) + (10.2 * weight_kg) + (8.3 * height_cm) + 60) * 1.11),
+            gender == "Male" & Mode == "Bike" ~ ((-24.3 * age) + (10.2 * weight_kg) + (8.3 * height_cm) + 1125), 
+            gender == "Female" & Mode == "Bike" ~ ((-13.7 * age) + (10.2 * weight_kg) + (8.3 * height_cm) + 60),
             TRUE ~ NA_real_))
     
     VO2_Predicted_tableNeder <- VO2_Predicted_tableNeder %>%
@@ -673,7 +697,7 @@ server <- function(input, output, session) {
           gender == "Female" & Mode == "Bike" ~ (45.2 - (0.35 * age) - (10.9 * 2) - (0.15 * weight_lbs) + (0.68 * height_in) - (0.46 * 2)) * weight_kg,
           gender == "Male" & Mode == "Treadmill" ~ (45.2 - (0.35 * age) - (10.9 * 1) - (0.15 * weight_lbs) + (0.68 * height_in) - (0.46 * 1)) * weight_kg,
           gender == "Female" & Mode == "Treadmill" ~ (45.2 - (0.35 * age) - (10.9 * 2) - (0.15 * weight_lbs) + (0.68 * height_in) - (0.46 * 1)) * weight_kg,
-          TRUE ~ NA_real_),
+          TRUE ~ NA_real_)
         
       )
     
@@ -768,6 +792,7 @@ server <- function(input, output, session) {
   })
   
   output$wassermanPlot <- renderPlotly({
+    
     # Plotting code for wesserman equation
     
     data <- data.frame(
@@ -814,24 +839,30 @@ server <- function(input, output, session) {
         values_to = "age"
       )
     
-    
+    # corrected for Mode *1.11 if Treadmill
     data <- data %>%
       mutate(
         VO2_peak_assumed = case_when(
-          gender == "Male" ~ (weight_assumed_kg * (50.72 - (0.372 * age))), 
-          gender == "Female" ~ (weight_assumed_kg + 42.8) * (22.78 - (0.17 * age)),
+          gender == "Male" & Mode == "Treadmill" ~ ((weight_assumed_kg * (50.72 - (0.372 * age))) * 1.11), 
+          gender == "Female" & Mode == "Treadmill" ~ ((weight_assumed_kg + 42.8) * (22.78 - (0.17 * age)) * 1.11),
+          gender == "Male" & Mode == "Bike" ~ (weight_assumed_kg * (50.72 - (0.372 * age))), 
+          gender == "Female" & Mode == "Bike" ~ (weight_assumed_kg + 42.8) * (22.78 - (0.17 * age)),
           TRUE ~ NA_real_),
         
         
         VO2_peak_ideal = case_when(
-          gender == "Male" ~ (weight_ideal * (50.72 - (0.372 * age))), 
-          gender == "Female" ~ (weight_ideal + 42.8) * (22.78 - (0.17 * age)),
+          gender == "Male" & Mode == "Treadmill" ~ ((weight_ideal * (50.72 - (0.372 * age))) * 1.11), 
+          gender == "Female" & Mode == "Treadmill" ~ ((weight_ideal + 42.8) * (22.78 - (0.17 * age)) * 1.11),
+          gender == "Male" & Mode == "Bike" ~ (weight_ideal * (50.72 - (0.372 * age))), 
+          gender == "Female"& Mode == "Bike" ~ (weight_ideal + 42.8) * (22.78 - (0.17 * age)),
           TRUE ~ NA_real_),
         
         
         VO2_peak_actual = case_when( #(ml/min)
-          gender == "Male" ~ (weight_kg * (50.72 - (0.372 * age))), 
-          gender == "Female" ~ (weight_kg + 42.8) * (22.78 - (0.17 * age)),
+          gender == "Male" & Mode == "Treadmill" ~ ((weight_kg * (50.72 - (0.372 * age))) * 1.11), 
+          gender == "Female" & Mode == "Treadmill" ~ ((weight_kg + 42.8) * (22.78 - (0.17 * age)) * 1.11),
+          gender == "Male" & Mode == "Bike" ~ (weight_kg * (50.72 - (0.372 * age))), 
+          gender == "Female" & Mode == "Bike" ~ (weight_kg + 42.8) * (22.78 - (0.17 * age)),
           TRUE ~ NA_real_)
         
       )
@@ -1188,25 +1219,33 @@ server <- function(input, output, session) {
         values_to = "age"
       )
     
+    #corrected for Mode: 0.89 * for bike
+    
     data <- data %>%
       mutate(
         
         
         VO2_peak_assumed = case_when(
-          gender == "Male" ~ ((60 - (0.55* age)) * (weight_assumed_kg)), 
-          gender == "Female" ~ ((48 - (0.37 * age)) * (weight_assumed_kg)),
+          gender == "Male" & Mode == "Treadmill" ~ ((60 - (0.55* age)) * (weight_assumed_kg)), 
+          gender == "Female" & Mode == "Treadmill" ~ ((48 - (0.37 * age)) * (weight_assumed_kg)),
+          gender == "Male" & Mode == "Bike" ~ (((60 - (0.55* age)) * (weight_assumed_kg)) * 0.89), 
+          gender == "Female" & Mode == "Bike" ~ (((48 - (0.37 * age)) * (weight_assumed_kg)) * 0.89),
           TRUE ~ NA_real_),
         
         
         VO2_peak_ideal = case_when(
-          gender == "Male" ~ ((60 - (0.55* age)) * (weight_ideal)), 
-          gender == "Female" ~ ((48 - (0.37 * age)) * (weight_ideal)),
+          gender == "Male" & Mode == "Treadmill" ~ ((60 - (0.55* age)) * (weight_ideal)), 
+          gender == "Female" & Mode == "Treadmill" ~ ((48 - (0.37 * age)) * (weight_ideal)),
+          gender == "Male" & Mode == "Bike" ~ (((60 - (0.55* age)) * (weight_ideal)) * 0.89), 
+          gender == "Female" & Mode == "Bike" ~ (((48 - (0.37 * age)) * (weight_ideal)) * 0.89),
           TRUE ~ NA_real_),
         
         
         VO2_peak_actual = case_when(#(ml/min)
-          gender == "Male" ~ ((60 - (0.55* age)) * (weight_kg)), 
-          gender == "Female" ~ ((48 - (0.37 * age)) * (weight_kg)),
+          gender == "Male" & Mode == "Treadmill" ~ ((60 - (0.55* age)) * (weight_kg)), 
+          gender == "Female" & Mode == "Treadmill" ~ ((48 - (0.37 * age)) * (weight_kg)),
+          gender == "Male" & Mode == "Bike" ~ (((60 - (0.55* age)) * (weight_kg)) * 0.89), 
+          gender == "Female" & Mode == "Bike" ~ (((48 - (0.37 * age)) * (weight_kg)) * 0.89),
           TRUE ~ NA_real_)
       )
     
@@ -1352,6 +1391,8 @@ server <- function(input, output, session) {
         )
       )
     
+    # corrected for mode: 1.11 for tread
+    
     data <- data %>% 
       pivot_longer(
         cols = c(age, age_Plus5, age_Plus10, age_Plus15, age_Minus5, age_Minus10,age_Minus15),
@@ -1364,20 +1405,26 @@ server <- function(input, output, session) {
     data <- data %>%
       mutate(
         VO2_peak_assumed = case_when(
-          gender == "Male" ~ (-3.76 + 0.034 * height_cm + 0.022 * weight_assumed_kg - 0.028 * age) * 1000, 
-          gender == "Female" ~ (-2.26 + 0.025 * height_cm + 0.01 * weight_assumed_kg - 0.018 * age) * 1000,
+          gender == "Male" & Mode == "Treadmill" ~ (((-3.76 + 0.034 * height_cm + 0.022 * weight_assumed_kg - 0.028 * age) * 1000) * 1.11), 
+          gender == "Female" & Mode == "Treadmill" ~ (((-2.26 + 0.025 * height_cm + 0.01 * weight_assumed_kg - 0.018 * age) * 1000) * 1.11),
+          gender == "Male" & Mode == "Bike" ~ (-3.76 + 0.034 * height_cm + 0.022 * weight_assumed_kg - 0.028 * age) * 1000, 
+          gender == "Female" & Mode == "Bike" ~ (-2.26 + 0.025 * height_cm + 0.01 * weight_assumed_kg - 0.018 * age) * 1000,
           TRUE ~ NA_real_),
         
         
         VO2_peak_ideal = case_when(
-          gender == "Male" ~ (-3.76 + 0.034 * height_cm + 0.022 * weight_ideal - 0.028 * age) * 1000, 
-          gender == "Female" ~ (-2.26 + 0.025 * height_cm + 0.01 * weight_ideal - 0.018 * age) * 1000,
+          gender == "Male" & Mode == "Treadmill" ~ (((-3.76 + 0.034 * height_cm + 0.022 * weight_ideal - 0.028 * age) * 1000) * 1.11), 
+          gender == "Female" & Mode == "Treadmill" ~ (((-2.26 + 0.025 * height_cm + 0.01 * weight_ideal - 0.018 * age) * 1000) * 1.11),
+          gender == "Male" & Mode == "Bike" ~ (-3.76 + 0.034 * height_cm + 0.022 * weight_ideal - 0.028 * age) * 1000, 
+          gender == "Female" & Mode == "Bike" ~ (-2.26 + 0.025 * height_cm + 0.01 * weight_ideal - 0.018 * age) * 1000,
           TRUE ~ NA_real_),
         
         
         VO2_peak_actual = case_when(#(ml/min)
-          gender == "Male" ~ (-3.76 + 0.034 * height_cm + 0.022 * weight_kg - 0.028 * age) * 1000, 
-          gender == "Female" ~ (-2.26 + 0.025 * height_cm + 0.01 * weight_kg - 0.018 * age) * 1000,
+          gender == "Male" & Mode == "Treadmill" ~ (((-3.76 + 0.034 * height_cm + 0.022 * weight_kg - 0.028 * age) * 1000) * 1.11), 
+          gender == "Female"& Mode == "Treadmill" ~ (((-2.26 + 0.025 * height_cm + 0.01 * weight_kg - 0.018 * age) * 1000) * 1.11),
+          gender == "Male" & Mode == "Bike" ~ (-3.76 + 0.034 * height_cm + 0.022 * weight_kg - 0.028 * age) * 1000, 
+          gender == "Female"& Mode == "Bike" ~ (-2.26 + 0.025 * height_cm + 0.01 * weight_kg - 0.018 * age) * 1000,
           TRUE ~ NA_real_)
       )
     
@@ -1524,6 +1571,7 @@ server <- function(input, output, session) {
         )
       )
     
+    # corrected for mode * 1.11
     data <- data %>% 
       pivot_longer(
         cols = c(age, age_Plus5, age_Plus10, age_Plus15, age_Minus5, age_Minus10,age_Minus15),
@@ -1536,20 +1584,26 @@ server <- function(input, output, session) {
     data <- data %>%
       mutate(
         VO2_peak_assumed = case_when(
-          gender == "Male" ~ ((-24.3 * age) + (10.2 * weight_assumed_kg) + (8.3 * height_cm) + 1125), 
-          gender == "Female" ~ ((-13.7 * age) + (10.2 * weight_assumed_kg) + (8.3 * height_cm) + 60),
+          gender == "Male" & Mode == "Treadmill" ~ (((-24.3 * age) + (10.2 * weight_assumed_kg) + (8.3 * height_cm) + 1125) * 1.11), 
+          gender == "Female" & Mode == "Treadmill" ~ (((-13.7 * age) + (10.2 * weight_assumed_kg) + (8.3 * height_cm) + 60) * 1.11),
+          gender == "Male" & Mode == "Bike" ~ ((-24.3 * age) + (10.2 * weight_assumed_kg) + (8.3 * height_cm) + 1125), 
+          gender == "Female" & Mode == "Bike" ~ ((-13.7 * age) + (10.2 * weight_assumed_kg) + (8.3 * height_cm) + 60),
           TRUE ~ NA_real_),
         
         
         VO2_peak_ideal = case_when(
-          gender == "Male" ~ ((-24.3 * age) + (10.2 * weight_ideal) + (8.3 * height_cm) + 1125), 
-          gender == "Female" ~ ((-13.7 * age) + (10.2 * weight_ideal) + (8.3 * height_cm) + 60),
+          gender == "Male" & Mode == "Treadmill" ~ (((-24.3 * age) + (10.2 * weight_ideal) + (8.3 * height_cm) + 1125) * 1.11), 
+          gender == "Female" & Mode == "Treadmill" ~ (((-13.7 * age) + (10.2 * weight_ideal) + (8.3 * height_cm) + 60) * 1.11),
+          gender == "Male" & Mode == "Bike" ~ ((-24.3 * age) + (10.2 * weight_ideal) + (8.3 * height_cm) + 1125), 
+          gender == "Female" & Mode == "Bike" ~ ((-13.7 * age) + (10.2 * weight_ideal) + (8.3 * height_cm) + 60),
           TRUE ~ NA_real_),
         
         
         VO2_peak_actual = case_when(
-          gender == "Male" ~ ((-24.3 * age) + (10.2 * weight_kg) + (8.3 * height_cm) + 1125), 
-          gender == "Female" ~ ((-13.7 * age) + (10.2 * weight_kg) + (8.3 * height_cm) + 60),
+          gender == "Male" & Mode == "Treadmill" ~ (((-24.3 * age) + (10.2 * weight_kg) + (8.3 * height_cm) + 1125) * 1.11), 
+          gender == "Female" & Mode == "Treadmill" ~ (((-13.7 * age) + (10.2 * weight_kg) + (8.3 * height_cm) + 60) * 1.11),
+          gender == "Male" & Mode == "Bike" ~ ((-24.3 * age) + (10.2 * weight_kg) + (8.3 * height_cm) + 1125), 
+          gender == "Female" & Mode == "Bike" ~ ((-13.7 * age) + (10.2 * weight_kg) + (8.3 * height_cm) + 60),
           TRUE ~ NA_real_)
       )
     
@@ -1562,31 +1616,6 @@ server <- function(input, output, session) {
         Age_Group == "age_Minus5"~ "Age - 5",
         Age_Group == "age_Minus10" ~ "Age - 10",
         Age_Group == "age_Minus15" ~ "Age - 15"))
-    
-    # Jones2_Plot <- ggplot(data) +
-    #   geom_line(aes(x = weight_assumed_kg, y = VO2_peak_Jones2_assumed), color = "black") +
-    #   geom_point(aes(x = weight_ideal, y = VO2_peak_Jones2_ideal,
-    #                  text = paste("Ideal Weight:", sprintf("%.2f", weight_ideal), "kg<br>VO2 Peak Predicted:",
-    #                               sprintf("%.2f", VO2_peak_Jones2_ideal), "ml/min<br>Percent Predicted:",
-    #                               sprintf("%.2f%%", (measured_VO2 / VO2_peak_Jones2_ideal * 100)))), color = "red", size = 5) +
-    #   geom_point(aes(x = weight_kg, y = VO2_peak_Jones2_actual,
-    #                  text = paste("Measured Weight:", sprintf("%.2f", weight_kg), "kg<br>VO2 Peak Predicted:",
-    #                               sprintf("%.2f", VO2_peak_Jones2_actual), "ml/min<br>Percent Predicted:",
-    #                               sprintf("%.2f%%", (measured_VO2 / VO2_peak_Jones2_actual * 100)))), color = "blue", size = 5) +
-    #   labs(y = "VO2 Peak Predicted ml/min", x = "Weight (kg)", caption = "Blue Dot = VO2 @ Actual Weight | Red Dot = VO2 @ Ideal Weight") +
-    #   geom_vline(xintercept = data$slider_weight, linetype = "dashed", color = "black") +
-    #   scale_y_continuous(
-    #     limits = c(1000, 6000),
-    #     breaks = seq(1000, 6000, by = 1000),  # Major breaks
-    #     minor_breaks = seq(1500, 5500, by = 1000)
-    #   ) +
-    #   theme_grey() +
-    #   theme(
-    #     axis.text = element_text(face = "bold", size = 12),
-    #     axis.title = element_text(face = "bold", size = 14),
-    #     plot.caption = element_text(size = 12),
-    #     panel.grid.minor = element_line(size = 0.5, linetype = 'solid', colour = "gray50")
-    #   )
     
     
     Neder_Plot <- ggplot(data) +
