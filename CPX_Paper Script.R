@@ -1,0 +1,3143 @@
+# Making a new script to re-organize the orginal 
+# using only the Access section. 
+
+
+
+
+# Packages  ---------------------------------------------------------------
+
+
+
+library(tidyverse)
+library(easystats)
+library(naniar)
+#library(readr)
+library(readxl)
+library(writexl)
+library(patchwork)
+#library(forcats)
+library(RColorBrewer)
+library(ggsci)
+library(ggrepel)
+library(Hmisc)
+library(ggbeeswarm)
+library(skimr)
+library(janitor)
+library(ggridges)
+library(ggpubr)
+library(rstatix)
+library(datarium)
+library(ez)
+library(gmodels)
+library(effectsize)
+library(data.table)
+library(ggstatsplot)
+library(reshape2)
+library(REDCapR)
+#library(stringr)
+library(haven)
+library(DataExplorer)
+library(httr)
+library(jsonlite)
+library(gghighlight)
+
+library(knitr)
+library(haven)
+#library(plotly)
+library(rlang)
+#library(esquisse)
+library(stringi)
+library(data.table)
+library(lubridate)
+library(psych)
+library(DT)
+library(tableone)
+library(irr)
+library(PMCMRplus)
+library(lme4)
+library(broom.mixed)
+library(ggalluvial)
+library(NatParksPalettes)
+
+# Bringing in Data --------------------------------------------------------
+
+
+AccessCPET <- read_excel("R:/WRIISC/Databases/Pulmonary/PDCEN/Downloads/CPET_ODC_7_1_24.xlsx")
+AccessCPET <- clean_names(AccessCPET)
+
+AccessCPET <- AccessCPET %>% 
+  filter(!is.na(wriiscid)) %>% 
+  select(
+    wriiscid	,
+    watts_peak,
+    cycle	,
+    treadmill	,
+    exercise	,
+    eperf_peakvo2	,
+    eperf_vo2kg_peak) %>% 
+  rename(
+    Y_N_cycle	=	cycle	,
+    Y_N_tredmill	=	treadmill	,
+    VO2.peak	=	eperf_peakvo2	,
+    VO2_kg.peak	=	eperf_vo2kg_peak)
+
+Access_IDS <- AccessCPET$wriiscid
+
+AccessPatient2023 <-  read_excel("R:/WRIISC/Databases/Pulmonary/PDCEN/Downloads/Patient_ODC_7_1_24.xlsx")
+AccessPatient2023 <- clean_names(AccessPatient2023)
+
+AccessPFT2023 <-  read_excel("R:/WRIISC/Databases/Pulmonary/PDCEN/Downloads/Pulmonary_ODC_7_1_24.xlsx")
+AccessPFT2023 <- clean_names(AccessPFT2023)
+
+
+AccessPatient2023 <- AccessPatient2023 %>% 
+  filter(
+    wriiscid %in% Access_IDS
+  )
+
+AccessPFT2023 <- AccessPFT2023 %>% 
+  select(
+    wriiscid,
+    race
+  )
+
+AccessPatient2023 <- 
+  merge(
+    AccessPatient2023,
+    AccessPFT2023,
+    by = "wriiscid"
+  ) 
+
+AccessPatient2023 <- AccessPatient2023 %>% 
+  mutate(
+    race = case_when(
+      grepl("Asia", race) ~ "SEA",
+      TRUE ~ race
+    )
+  )
+
+rm(AccessPFT2023
+)
+
+
+#write.csv(colnames(PDCEN_CPET), "Variables_CPET.csv",row.names = FALSE)
+
+AccessCPET <-
+  merge(
+    AccessPatient2023,
+    AccessCPET,
+    by = "wriiscid"
+  ) %>% 
+  rename(
+    Subject_ID = wriiscid
+  )
+
+AccessCPET <- AccessCPET %>% 
+  filter(
+    !is.na(VO2.peak)
+  )
+
+# Setting Up dataset for predicted equations
+
+AccessCPET <- AccessCPET %>% 
+  mutate(
+    Mode = case_when(
+      Y_N_cycle == TRUE ~ "Bike",
+      Y_N_tredmill == TRUE ~ "Treadmill",
+      str_detect(exercise, regex("bike|watt|cycle|ergometry|ergo|w", ignore_case = TRUE)) ~ "Bike",
+      str_detect(exercise, regex("Tread|bruce|Gervino", ignore_case = TRUE)) ~ "Treadmill",   
+      TRUE ~ NA_character_
+    )
+  )
+
+AccessCPET$Mode <- as.factor(AccessCPET$Mode)
+
+AccessCPET <-  AccessCPET %>% 
+  select(
+    Subject_ID, pdcen_site, Mode, everything()
+  )
+
+
+AccessCPET <- AccessCPET %>% 
+  filter(!is.na(VO2.peak) & !is.na(height) & !is.na(age) & !is.na(bmi) & !is.na(race) &!is.na(Mode))
+
+
+AccessCPET %>% 
+  filter(duplicated(Subject_ID)) %>% 
+  pull(Subject_ID)
+
+AccessCPET <- AccessCPET %>% 
+  distinct(Subject_ID, .keep_all = TRUE) 
+
+AccessCPET <- AccessCPET %>% 
+  rename(
+    weight_lbs = weight,
+    height_in = height
+  )
+
+AccessCPET <- AccessCPET %>% 
+  mutate(
+    weight_kg = weight_lbs * 0.4546,
+    height_cm = height_in * 2.54,
+    bmi = (weight_lbs/(height_in * height_in) * 703),
+    gender = factor(case_when(
+      gender == 0 ~ 2,
+      TRUE ~ gender
+    ))
+  )
+
+AccessCPET <- AccessCPET %>% 
+  rename(
+    VO2_peak.actual = VO2.peak,
+    VO2_kg_peak.actual = VO2_kg.peak,
+    Watts_peak = watts_peak
+  )
+
+AccessCPET <- AccessCPET %>% 
+  mutate(
+    VO2_peak.actual = case_when(
+      VO2_peak.actual < 10 ~ VO2_peak.actual * 1000,
+      VO2_peak.actual >= 10 ~ VO2_peak.actual, 
+      TRUE ~ NA_real_
+    ))
+
+AccessCPET <- AccessCPET %>% 
+  mutate(VO2_kg_peak.actual = VO2_peak.actual/weight_kg)
+
+
+AccessCPET <- AccessCPET %>% 
+  mutate(
+    weight_ideal = case_when(
+      gender == 1 ~ 0.79 * height_cm - 60.7,
+      gender == 2 ~ 0.65 * height_cm - 42.8,
+      TRUE ~ NA_real_),
+    cycle_factor = case_when(
+      gender == 1 ~ 50.72 - 0.372 * (age),
+      gender == 2 ~ 22.78 - 0.17 * (age),
+      TRUE ~ NA_real_)
+  )
+
+#QCing
+
+#removing Vet who did arm and crazy vo2 value if any (assuming typo)
+# removing test subjects, lastname = Sandhya
+
+#Lookiing for vets that did arm 
+AccessCPET %>% 
+  filter(
+    str_detect(exercise, regex("arm", ignore_case = TRUE))
+  ) %>% 
+  pull(Subject_ID)
+
+
+# 35700 35977 36815
+
+AccessCPET <- AccessCPET %>% 
+  filter(Subject_ID != 36815 & Subject_ID != 35700 & Subject_ID != 35977)
+
+
+# removing vets below 500ml/min and above 10,000 min ()
+AccessCPET <- AccessCPET %>% 
+  filter(
+    VO2_peak.actual > 500 & VO2_peak.actual < 10000
+  )
+#filtering out test files
+AccessCPET <- AccessCPET %>% 
+  filter(
+    lastname != "Bandi")
+#filtering out super low bmi of 2.3
+AccessCPET <- AccessCPET %>% 
+  filter(
+    bmi > 8)
+
+
+#final = 305 so far
+
+
+#assessing subjects based on age and bmi
+
+#categorizing BMI
+
+quantile(AccessCPET$bmi)
+#       0%      25%      50%      75%     100% 
+# 16.72362 28.01578 30.84592 34.82191 46.85737  
+
+quantile(AccessCPET$age)
+# 0%  25%  50%  75% 100% 
+# 24   36   44   51   67 
+
+
+AccessCPET <- AccessCPET %>% 
+  mutate(
+    BMI_cat = factor(case_when(
+      bmi <= 28 ~ 1,
+      bmi > 28 & bmi <= 35 ~ 2,
+      bmi > 35 ~ 3, 
+      TRUE ~ NA_real_
+    )),
+    Age_cat = factor(case_when(
+      age <= 36 ~ 1,
+      age > 36 & age <= 51 ~ 2,
+      age > 51 ~ 3,
+      TRUE ~ NA_real_
+    ))
+  )
+
+
+
+
+# Access_CPET is the base file used to create everything 
+
+# Setting up equations ----------------------------------------------------
+
+
+
+# Getting all equations for all ODC subjects
+# Same process as above and then making the same plots
+
+# Setting up 2 different data sets
+# 1) Uncorrected = all normal, did not calculate if wrong mode is used. 
+# 2) Corrected = use all equations but correct it by a factor of 1.11. Bike to Tread --> * 1.11, Tread to Bike --> * .89 (only if no corrections is already there)
+
+#### 1)----------------------------------------------------------------------------
+AccessCPET_Uncorrected <- AccessCPET %>% 
+    mutate(
+        FRIEND_Predicted = case_when(
+          gender == 1 & Mode == "Bike" ~ (45.2 - (0.35 * age) - (10.9 * 1) - (0.15 * weight_lbs) + (0.68 * height_in) - (0.46 * 2)) * weight_kg,
+          gender == 2 & Mode == "Bike" ~ (45.2 - (0.35 * age) - (10.9 * 2) - (0.15 * weight_lbs) + (0.68 * height_in) - (0.46 * 2)) * weight_kg,
+          gender == 1 & Mode == "Treadmill" ~ (45.2 - (0.35 * age) - (10.9 * 1) - (0.15 * weight_lbs) + (0.68 * height_in) - (0.46 * 1)) * weight_kg,
+          gender == 2 & Mode == "Treadmill" ~ (45.2 - (0.35 * age) - (10.9 * 2) - (0.15 * weight_lbs) + (0.68 * height_in) - (0.46 * 1)) * weight_kg,
+          TRUE ~ NA_real_),
+        
+        Wasserman_Predicted = case_when(
+          gender == 1 & Mode == "Bike" ~ (weight_kg * (50.72 - (0.372 * age))), 
+          gender == 2 & Mode == "Bike" ~ (weight_kg + 42.8) * (22.78 - (0.17 * age)),
+          TRUE ~ NA_real_),
+        
+        Hansen_Predicted = case_when(
+          gender == 1 & Mode == "Bike" & weight_kg < weight_ideal ~ (((weight_ideal + weight_kg) / 2) * cycle_factor),
+          gender == 1 & Mode == "Bike" & weight_kg == weight_ideal ~ (weight_kg * cycle_factor),
+          gender == 1 & Mode == "Bike" & weight_kg > weight_ideal ~ ((weight_ideal * cycle_factor) + 6 * (weight_kg - weight_ideal)),
+          
+          # gender == 1 & Mode == "Treadmill" & weight_kg < weight_ideal ~ (((weight_ideal + weight_kg) / 2) * cycle_factor) * 1.11,
+          # gender == 1 & Mode == "Treadmill" & weight_kg == weight_ideal ~ (weight_kg * cycle_factor) * 1.11,
+          # gender == 1 & Mode == "Treadmill" & weight_kg > weight_ideal ~ ((weight_ideal * cycle_factor) + 6 * (weight_kg - weight_ideal)) * 1.11,
+          # 
+          gender == 2 & Mode == "Bike" & weight_kg < weight_ideal ~ (((weight_ideal + weight_kg + 86) / 2) * cycle_factor),
+          gender == 2 & Mode == "Bike" & weight_kg == weight_ideal ~ ((weight_kg + 43) * cycle_factor),
+          gender == 2 & Mode == "Bike" & weight_kg > weight_ideal ~ (((weight_ideal + 43) * cycle_factor) + 6 * (weight_kg - weight_ideal)),
+          
+          # gender == 2 & Mode == "Treadmill" & weight_kg < weight_ideal ~ (((weight_ideal + weight_kg + 86) / 2) * cycle_factor) * 1.11,
+          # gender == 2 & Mode == "Treadmill" & weight_kg == weight_ideal ~ ((weight_kg + 43) * cycle_factor) * 1.11,
+          # gender == 2 & Mode == "Treadmill" & weight_kg > weight_ideal ~ (((weight_ideal + 43) * cycle_factor) + 6 * (weight_kg - weight_ideal)) * 1.11,
+          # 
+          TRUE ~ NA_real_),
+        
+        
+        Bruce_Predicted = case_when(
+          gender == 1 & Mode == "Treadmill" ~ ((60 - (0.55* age)) * (weight_kg)), 
+          gender == 2 & Mode == "Treadmill" ~ ((48 - (0.37 * age)) * (weight_kg)),
+          TRUE ~ NA_real_),
+        
+        Jones_Predicted = case_when(
+          gender == 1 & Mode == "Bike" ~ (-3.76 + 0.034 * height_cm + 0.022 * weight_kg - 0.028 * age) * 1000, 
+          gender == 2 & Mode == "Bike" ~ (-2.26 + 0.025 * height_cm + 0.01 * weight_kg - 0.018 * age) * 1000,
+          TRUE ~ NA_real_),
+        
+        Neder_Predicted = case_when(
+          gender == 1 & Mode == "Bike" ~ ((-24.3 * age) + (10.2 * weight_kg) + (8.3 * height_cm) + 1125), 
+          gender == 2 & Mode == "Bike" ~ ((-13.7 * age) + (10.2 * weight_kg) + (8.3 * height_cm) + 60),
+          TRUE ~ NA_real_)
+      )
+
+
+AccessCPET_Uncorrected <- AccessCPET_Uncorrected %>% 
+  mutate(
+    Friend_pp = (VO2_peak.actual/FRIEND_Predicted) * 100,
+    Wasserman_pp = (VO2_peak.actual/Wasserman_Predicted) * 100,
+    Hansen_pp = (VO2_peak.actual/Hansen_Predicted) * 100,
+    Bruce_pp = (VO2_peak.actual/Bruce_Predicted) * 100,
+    Jones2_pp = (VO2_peak.actual/Jones_Predicted) * 100,
+    Neder_pp = (VO2_peak.actual/Neder_Predicted) * 100
+  )
+
+
+
+Access_Percent_predicted_Uncorrected <- AccessCPET_Uncorrected %>%  
+  select(
+    Subject_ID,
+    Mode,
+    VO2_peak.actual,
+    FRIEND_Predicted,
+    Wasserman_Predicted,
+    Hansen_Predicted,
+    Bruce_Predicted,
+    Jones_Predicted,
+    Neder_Predicted,
+    Friend_pp,
+    Wasserman_pp,
+    Hansen_pp,
+    Bruce_pp,
+    Jones2_pp,
+    Neder_pp
+  ) %>%  
+  rename(
+    Measured_Predicted = VO2_peak.actual,
+    FRIEND_Percent.Predicted = Friend_pp,
+    Wasserman_Percent.Predicted = Wasserman_pp,
+    Hansen_Percent.Predicted = Hansen_pp,
+    Bruce_Percent.Predicted = Bruce_pp,
+    Jones_Percent.Predicted = Jones2_pp,
+    Neder_Percent.Predicted = Neder_pp
+  )
+
+AccessCPET_Uncorrected <-  AccessCPET_Uncorrected  %>% 
+  rename(
+    FRIEND_Percent.Predicted = Friend_pp,
+    Wasserman_Percent.Predicted = Wasserman_pp,
+    Hansen_Percent.Predicted = Hansen_pp,
+    Bruce_Percent.Predicted = Bruce_pp,
+    Jones_Percent.Predicted = Jones2_pp,
+    Neder_Percent.Predicted = Neder_pp
+  )
+
+
+Access_Percent_predicted_tidy_Uncorrected <- Access_Percent_predicted_Uncorrected %>%  
+  pivot_longer(
+    cols = -(c(Subject_ID, Mode)),
+    names_to = c("Equation", ".value"),
+    names_pattern = "(Measured|FRIEND|Wasserman|Hansen|Bruce|Jones|Neder)_(Predicted|Percent.Predicted)"
+  )
+
+Access_Percent_predicted_tidy_Uncorrected <- Access_Percent_predicted_tidy_Uncorrected %>%  
+  mutate(
+    Equation = as_factor(Equation)
+  )
+
+Access_Percent_predicted_tidy_Uncorrected <- Access_Percent_predicted_tidy_Uncorrected %>%  
+  mutate(
+    Clinical_Interpretation = case_when(
+      Percent.Predicted < 80 ~ 1, #low VO2
+      Percent.Predicted >= 80 ~ 0, #normal 
+      TRUE ~ NA_real_
+    )
+  )
+
+Access_Percent_predicted_tidy_Uncorrected$Clinical_Interpretation <- factor(Access_Percent_predicted_tidy_Uncorrected$Clinical_Interpretation)
+
+
+Access_Interpertation_wide_Uncorrected <- Access_Percent_predicted_tidy_Uncorrected %>% 
+  pivot_wider(id_cols = Subject_ID, 
+              names_from = Equation, 
+              values_from = Clinical_Interpretation)
+
+Access_Interpertation_wide_Uncorrected <- Access_Interpertation_wide_Uncorrected %>% 
+  select(
+    -(Measured)
+  )
+
+
+Access_Percent_predicted_tidy_Uncorrected <- 
+  merge(
+    AccessCPET_Uncorrected[,c("Subject_ID", "age", "gender", "bmi", "race")],
+    Access_Percent_predicted_tidy_Uncorrected,
+    by = "Subject_ID"
+  )
+
+Access_Percent_predicted_tidy_Uncorrected$Equation <- factor(Access_Percent_predicted_tidy_Uncorrected$Equation,
+                                                             levels =  c("Measured","Wasserman", "FRIEND","Hansen","Bruce","Jones", "Neder")) 
+
+Access_Percent_predicted_tidy_Uncorrected$Subject_ID <- factor(Access_Percent_predicted_tidy_Uncorrected$Subject_ID)
+Access_Percent_predicted_tidy_Uncorrected$race <- factor(Access_Percent_predicted_tidy_Uncorrected$race)
+Access_Percent_predicted_tidy_Uncorrected$gender <- factor(Access_Percent_predicted_tidy_Uncorrected$gender)
+
+
+#### 2)---------------------------------------------------------------------------
+
+
+#Corrected values based on Mode:
+# Wasserman, Jones, Neder: for Treadmill: x1.11
+# Bruce: for Bike: x 0.89
+AccessCPET_Corrected <- AccessCPET %>% 
+  mutate(
+    FRIEND_Predicted = case_when(
+      gender == 1 & Mode == "Bike" ~ (45.2 - (0.35 * age) - (10.9 * 1) - (0.15 * weight_lbs) + (0.68 * height_in) - (0.46 * 2)) * weight_kg,
+      gender == 2 & Mode == "Bike" ~ (45.2 - (0.35 * age) - (10.9 * 2) - (0.15 * weight_lbs) + (0.68 * height_in) - (0.46 * 2)) * weight_kg,
+      gender == 1 & Mode == "Treadmill" ~ (45.2 - (0.35 * age) - (10.9 * 1) - (0.15 * weight_lbs) + (0.68 * height_in) - (0.46 * 1)) * weight_kg,
+      gender == 2 & Mode == "Treadmill" ~ (45.2 - (0.35 * age) - (10.9 * 2) - (0.15 * weight_lbs) + (0.68 * height_in) - (0.46 * 1)) * weight_kg,
+      TRUE ~ NA_real_),
+    
+    Wasserman_Predicted = case_when(
+      gender == 1 & Mode == "Treadmill" ~ ((weight_kg * (50.72 - (0.372 * age))) * 1.11), 
+      gender == 2 & Mode == "Treadmill" ~ (((weight_kg + 42.8) * (22.78 - (0.17 * age))) * 1.11),
+      gender == 1 & Mode == "Bike" ~ (weight_kg * (50.72 - (0.372 * age))), 
+      gender == 2 & Mode == "Bike" ~ ((weight_kg + 42.8) * (22.78 - (0.17 * age))),
+      TRUE ~ NA_real_),
+    
+    Hansen_Predicted = case_when(
+      gender == 1 & Mode == "Bike" & weight_kg < weight_ideal ~ (((weight_ideal + weight_kg) / 2) * cycle_factor),
+      gender == 1 & Mode == "Bike" & weight_kg == weight_ideal ~ (weight_kg * cycle_factor),
+      gender == 1 & Mode == "Bike" & weight_kg > weight_ideal ~ ((weight_ideal * cycle_factor) + 6 * (weight_kg - weight_ideal)),
+      
+      gender == 1 & Mode == "Treadmill" & weight_kg < weight_ideal ~ (((weight_ideal + weight_kg) / 2) * cycle_factor) * 1.11,
+      gender == 1 & Mode == "Treadmill" & weight_kg == weight_ideal ~ (weight_kg * cycle_factor) * 1.11,
+      gender == 1 & Mode == "Treadmill" & weight_kg > weight_ideal ~ ((weight_ideal * cycle_factor) + 6 * (weight_kg - weight_ideal)) * 1.11,
+      
+      gender == 2 & Mode == "Bike" & weight_kg < weight_ideal ~ (((weight_ideal + weight_kg + 86) / 2) * cycle_factor),
+      gender == 2 & Mode == "Bike" & weight_kg == weight_ideal ~ ((weight_kg + 43) * cycle_factor),
+      gender == 2 & Mode == "Bike" & weight_kg > weight_ideal ~ (((weight_ideal + 43) * cycle_factor) + 6 * (weight_kg - weight_ideal)),
+      
+      gender == 2 & Mode == "Treadmill" & weight_kg < weight_ideal ~ (((weight_ideal + weight_kg + 86) / 2) * cycle_factor) * 1.11,
+      gender == 2 & Mode == "Treadmill" & weight_kg == weight_ideal ~ ((weight_kg + 43) * cycle_factor) * 1.11,
+      gender == 2 & Mode == "Treadmill" & weight_kg > weight_ideal ~ (((weight_ideal + 43) * cycle_factor) + 6 * (weight_kg - weight_ideal)) * 1.11,
+      TRUE ~ NA_real_),
+    
+    Bruce_Predicted = case_when(
+      gender == 1 & Mode == "Treadmill" ~ ((60 - (0.55* age)) * (weight_kg)), 
+      gender == 2 & Mode == "Treadmill" ~ ((48 - (0.37 * age)) * (weight_kg)),
+      gender == 1 & Mode == "Bike" ~ (((60 - (0.55* age)) * (weight_kg)) * 0.89), 
+      gender == 2 & Mode == "Bike" ~ (((48 - (0.37 * age)) * (weight_kg)) * 0.89),
+      TRUE ~ NA_real_),
+    
+    Jones_Predicted = case_when(
+      gender == 1 & Mode == "Bike" ~ (-3.76 + 0.034 * height_cm + 0.022 * weight_kg - 0.028 * age) * 1000, 
+      gender == 2 & Mode == "Bike" ~ (-2.26 + 0.025 * height_cm + 0.01 * weight_kg - 0.018 * age) * 1000,
+      gender == 1 & Mode == "Treadmill" ~ (((-3.76 + 0.034 * height_cm + 0.022 * weight_kg - 0.028 * age) * 1000) * 1.11), 
+      gender == 2 & Mode == "Treadmill" ~ (((-2.26 + 0.025 * height_cm + 0.01 * weight_kg - 0.018 * age) * 1000) * 1.11),
+      TRUE ~ NA_real_),
+    
+    Neder_Predicted = case_when(
+      gender == 1 & Mode == "Bike" ~ ((-24.3 * age) + (10.2 * weight_kg) + (8.3 * height_cm) + 1125), 
+      gender == 2 & Mode == "Bike" ~ ((-13.7 * age) + (10.2 * weight_kg) + (8.3 * height_cm) + 60),
+      gender == 1 & Mode == "Treadmill" ~ ((((-24.3 * age) + (10.2 * weight_kg) + (8.3 * height_cm) + 1125)) * 1.11), 
+      gender == 2 & Mode == "Treadmill" ~ ((((-13.7 * age) + (10.2 * weight_kg) + (8.3 * height_cm) + 60)) * 1.11),
+      TRUE ~ NA_real_)
+  )
+
+AccessCPET_Corrected <- AccessCPET_Corrected %>% 
+  mutate(
+    Friend_pp = (VO2_peak.actual/FRIEND_Predicted) * 100,
+    Wasserman_pp = (VO2_peak.actual/Wasserman_Predicted) * 100,
+    Hansen_pp = (VO2_peak.actual/Hansen_Predicted) * 100,
+    Bruce_pp = (VO2_peak.actual/Bruce_Predicted) * 100,
+    Jones2_pp = (VO2_peak.actual/Jones_Predicted) * 100,
+    Neder_pp = (VO2_peak.actual/Neder_Predicted) * 100
+  )
+
+
+
+Access_Percent_predicted_Corrected <- AccessCPET_Corrected %>%  
+  select(
+    Subject_ID,
+    Mode,
+    VO2_peak.actual,
+    FRIEND_Predicted,
+    Wasserman_Predicted,
+    Hansen_Predicted,
+    Bruce_Predicted,
+    Jones_Predicted,
+    Neder_Predicted,
+    Friend_pp,
+    Wasserman_pp,
+    Hansen_pp,
+    Bruce_pp,
+    Jones2_pp,
+    Neder_pp
+  ) %>%  
+  rename(
+    Measured_Predicted = VO2_peak.actual,
+    FRIEND_Percent.Predicted = Friend_pp,
+    Wasserman_Percent.Predicted = Wasserman_pp,
+    Hansen_Percent.Predicted = Hansen_pp,
+    Bruce_Percent.Predicted = Bruce_pp,
+    Jones_Percent.Predicted = Jones2_pp,
+    Neder_Percent.Predicted = Neder_pp
+  )
+
+AccessCPET_Corrected <-  AccessCPET_Corrected  %>% 
+  rename(
+    FRIEND_Percent.Predicted = Friend_pp,
+    Wasserman_Percent.Predicted = Wasserman_pp,
+    Hansen_Percent.Predicted = Hansen_pp,
+    Bruce_Percent.Predicted = Bruce_pp,
+    Jones_Percent.Predicted = Jones2_pp,
+    Neder_Percent.Predicted = Neder_pp
+  )
+
+
+Access_Percent_predicted_tidy_Corrected <- Access_Percent_predicted_Corrected %>%  
+  pivot_longer(
+    cols = -(c(Subject_ID, Mode)),
+    names_to = c("Equation", ".value"),
+    names_pattern = "(Measured|FRIEND|Wasserman|Hansen|Bruce|Jones|Neder)_(Predicted|Percent.Predicted)"
+  )
+
+Access_Percent_predicted_tidy_Corrected <- Access_Percent_predicted_tidy_Corrected %>%  
+  mutate(
+    Equation = as_factor(Equation)
+  )
+
+Access_Percent_predicted_tidy_Corrected <- Access_Percent_predicted_tidy_Corrected %>%  
+  mutate(
+    Clinical_Interpretation = case_when(
+      Percent.Predicted < 80 ~ 1, #low VO2
+      Percent.Predicted >= 80 ~ 0, #normal 
+      TRUE ~ NA_real_
+    )
+  )
+
+Access_Percent_predicted_tidy_Corrected$Clinical_Interpretation <- factor(Access_Percent_predicted_tidy_Corrected$Clinical_Interpretation)
+
+
+Access_Interpertation_wide_Corrected <- Access_Percent_predicted_tidy_Corrected %>% 
+  pivot_wider(id_cols = Subject_ID, 
+              names_from = Equation, 
+              values_from = Clinical_Interpretation)
+
+Access_Interpertation_wide_Corrected <- Access_Interpertation_wide_Corrected %>% 
+  select(
+    -(Measured)
+  )
+
+
+Access_Percent_predicted_tidy_Corrected <- 
+  merge(
+    AccessCPET_Corrected[,c("Subject_ID", "age", "gender", "bmi", "race")],
+    Access_Percent_predicted_tidy_Corrected,
+    by = "Subject_ID"
+  )
+
+Access_Percent_predicted_tidy_Corrected$Equation <- factor(Access_Percent_predicted_tidy_Corrected$Equation,
+                                                             levels =  c("Measured","Wasserman", "FRIEND","Hansen","Bruce","Jones", "Neder")) 
+
+Access_Percent_predicted_tidy_Corrected$Subject_ID <- factor(Access_Percent_predicted_tidy_Corrected$Subject_ID)
+Access_Percent_predicted_tidy_Corrected$race <- factor(Access_Percent_predicted_tidy_Corrected$race)
+Access_Percent_predicted_tidy_Corrected$gender <- factor(Access_Percent_predicted_tidy_Corrected$gender)
+
+# Splitting up Tread vs Bike: Possible supplemental? (Plots + Analysis) ----------------------------------------------
+
+# Need to split up the data set for supplement. 
+# Using the uncorrected dataset
+
+#used these because the orginal data used bike or tread or both (FRIEND)
+
+#There is a correction factor for Hansen, but ignoring that since its just the 1.11 
+Tread_equations <- c("FRIEND", "Bruce")
+Bike_equations <-  c("FRIEND", "Wasserman", "Hansen", "Jones", "Neder")
+
+#getting datasets
+
+#### Tread--------------------------------------------------------------------
+
+
+#Setting up Dataset for just Treadmill data
+
+Tread_Dataset <- Access_Percent_predicted_tidy_Uncorrected %>% 
+  filter(Equation %in% Tread_equations) %>% 
+  filter(Mode == "Treadmill")
+
+
+Tread_Dataset$Equation <-  factor(Tread_Dataset$Equation,
+                                  levels =  c("FRIEND","Bruce")) 
+
+Tread_Dataset$Subject_ID <- factor(Tread_Dataset$Subject_ID)
+
+Tread_Dataset_wide <- Tread_Dataset %>% 
+  pivot_wider(
+    names_from = Equation, 
+    values_from = c(Percent.Predicted, Predicted, Clinical_Interpretation)
+  )
+
+
+Tread_Interpretation_wide <- Tread_Dataset %>% 
+  pivot_wider(id_cols = Subject_ID, 
+              names_from = Equation, 
+              values_from = Clinical_Interpretation)
+
+
+#Plots for Tread
+
+Tread_Dataset %>% 
+  ggplot(aes(x = Equation, y = Predicted)) +
+  geom_violindot(aes(fill = Equation), binwidth = 100, dots_size = 0.1, color_dots ="black", fill_dots = "black") +
+  # stat_summary(fun = mean, geom = "point", size = 3) +
+  # stat_summary(fun.data = mean_sdl, fun.args = list(mult = 1), geom = "errorbar", width = 0.2) +
+  theme_classic() +
+  scale_fill_jco() +
+  labs(y = expression(Peak~VO[2]~(ml%*%min^-1)), x = "") +
+  theme(
+    legend.position = "none",
+    axis.title = element_text(size = 16),
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 14),
+    axis.text = element_text(size = 14)
+  )
+
+
+#plot to look at differences in classification between each equation
+
+#Tread
+Tread_Dataset %>% 
+  mutate(
+    Clinical_Interpretation = case_when(
+      Clinical_Interpretation == 0 ~ "Preserved Exercise Capacity",
+      Clinical_Interpretation == 1 ~ "Reduced Exercise Capacity",
+      TRUE ~ NA_character_
+    )
+  ) %>% 
+  filter(Equation != "Measured") %>% 
+  ggplot(aes(x = Equation, fill = Clinical_Interpretation)) +
+  geom_bar(position = "fill") +
+  scale_color_manual(values = natparks.pals("Triglav")) +
+  scale_fill_manual(values = natparks.pals("Triglav")) +
+  theme_classic() +
+  labs(y = "Proportion of Subjects", x = "", fill = "Clinical Interpretation") 
+
+
+
+
+# plots for agreement:
+
+# FvB:
+
+
+AccessCPET_Uncorrected %>%  
+  mutate(
+    gender = case_when(
+      gender == 1 ~ "Male",
+      gender == 2 ~ "Female",
+      TRUE ~ NA_character_
+    )
+  ) %>%
+  filter(Mode == "Treadmill") %>% 
+  ggplot() +
+  geom_point(aes(y = FRIEND_Percent.Predicted, x = Bruce_Percent.Predicted, color = BMI_cat, shape = gender)) +
+  geom_vline(xintercept = 80, linetype = "dashed", color = "black", size = 0.8, alpha = 0.5) +
+  geom_hline(yintercept = 80, linetype = "dashed", color = "black", size = 0.8, alpha = 0.5) +
+  labs(title = "FRIEND to Bruce", y = "% Predicted: FRIEND ", 
+       x = "% Predicted: Bruce", color = "BMI Category", shape = "Gender") +
+  theme_classic() +
+  scale_color_manual(values = natparks.pals("Triglav")) +
+  scale_fill_manual(values = natparks.pals("Triglav")) +
+  scale_x_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
+  scale_y_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
+  geom_text(label = "+ , -", x = 40, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "- , +", x = 140, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "+ , +", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "- , -", x = 40, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  theme(
+    legend.position = "none",
+    axis.title = element_text(size = 16),
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 14),
+    axis.text = element_text(size = 14)
+  )
+
+
+# All Analayis for Tread
+
+
+shapiro.test(Tread_Dataset$Predicted)
+
+
+#Runnig a wilcox test since its just two variables 
+wilcox.test(Tread_Dataset_wide$Predicted_FRIEND, Tread_Dataset_wide$Predicted_Bruce, paired = TRUE)
+wilcox_effsize(data = Tread_Dataset, Predicted ~ Equation, paired = TRUE)
+
+
+#Interpretation comparison 
+
+Access_equations_Tread <- colnames(Tread_Interpretation_wide)[-1]  #  first column is Subject_ID
+
+#Pairwise comparison: code below will create a new variable for each pair of equations and show change per subject
+
+for (i in 1:(length(Access_equations_Tread)-1)){
+  for (j in (i+1):length(Access_equations_Tread)){
+    
+    #creating the pair name ( F vs W)
+    pair_name <- paste(Access_equations_Tread[i], Access_equations_Tread[j], sep = "_")
+    
+    #creating a new variable for the pair
+    
+    Tread_Interpretation_wide <- Tread_Interpretation_wide %>% 
+      mutate(!!pair_name := factor(case_when(
+        .data[[Access_equations_Tread[i]]] == 0 & .data[[Access_equations_Tread[j]]] == 0 ~ 0, # both normal 
+        .data[[Access_equations_Tread[i]]] == 1 & .data[[Access_equations_Tread[j]]] == 1 ~ 0, # both abnormal 
+        .data[[Access_equations_Tread[i]]] == 1 & .data[[Access_equations_Tread[j]]] == 0 ~ -1, # reclassified as normal
+        .data[[Access_equations_Tread[i]]] == 0 & .data[[Access_equations_Tread[j]]] == 1 ~ 1, # reclassified as abnormal
+        TRUE ~ NA_real_))
+      )
+  }
+}
+
+#Shows Percent change:
+# 0 = no change
+# -1 = # reclassified as normal
+# 1 = # reclassified as adnormal
+Tread_Interpretation_wide %>% 
+  select(-(Subject_ID))%>% 
+  CreateTableOne(data = ., test = FALSE, argsApprox = FALSE, argsNormal = FALSE, smd = FALSE, addOverall = TRUE) %>% 
+  summary(digits = 4)
+
+
+
+#Kappa analysis for tread: Agreement between the two
+
+# Initialize an empty matrix to store kappa values
+kappa_matrix <- matrix(NA, nrow = length(Access_equations_Tread), ncol = length(Access_equations_Tread), dimnames = list(Access_equations_Tread, Access_equations_Tread))
+
+
+
+# Loop through each pair of equations and calculate Kappa
+
+
+for (i in 1:(length(Access_equations_Tread)-1)) {
+  for (j in (i+1):length(Access_equations_Tread)) {
+    
+    eq1 <- Access_Interpertation_wide_Uncorrected[[Access_equations_Tread[i]]]
+    eq2 <- Access_Interpertation_wide_Uncorrected[[Access_equations_Tread[j]]]
+    
+    Access_kappa_results <- kappa2(cbind(eq1, eq2))
+    cat("Kappa for", Access_equations_Tread[i], "vs", Access_equations_Tread[j], ":\n")
+    
+    print(Access_kappa_results)
+    cat("\n")
+    
+    kappa_matrix[i, j ] <- round(Access_kappa_results$value, digits = 2)
+    kappa_matrix[j, i ] <- round(Access_kappa_results$value, digits = 2)
+    
+    
+  }
+}
+
+# table(Tread_Dataset_wide$FRIEND, Tread_Dataset_wide$Wasserman)
+# table(Tread_Dataset_wide$FRIEND, Tread_Dataset_wide$Bruce)
+# table(Tread_Dataset_wide$Wasserman, Tread_Dataset_wide$Bruce)
+
+#Assesment of what is driving the difference for just Tread
+
+#Shows Percent change:
+# 0 = no change
+# -1 = # reclassified as normal
+# 1 = # reclassified as adnormal
+
+Classifications_Tread <- Tread_Interpretation_wide %>% 
+  select(-FRIEND_Bruce) %>% 
+  mutate(
+    FvB = case_when(
+      FRIEND == "1" & Bruce == "1" ~ 0,
+      FRIEND == "0" & Bruce == "0" ~ 0,
+      FRIEND == "1" & Bruce == "0" ~ -1,
+      FRIEND == "0" & Bruce == "1" ~ 1,
+      TRUE ~ NA_real_
+    )) %>% 
+  mutate(
+    Status = case_when(
+      FvB == 0 ~ 0,
+      TRUE ~ 1
+    )
+  )
+
+
+Classifications_Tread <- 
+  merge(
+    AccessCPET_Uncorrected[,c("Subject_ID", "gender",  "Mode" , "race" ,"age", "weight_kg", "height_cm", "bmi", "FRIEND_Predicted", "Bruce_Predicted")],
+    Classifications_Tread,
+    by = "Subject_ID"
+  )
+
+
+#plots:
+(Classifications_Tread %>% 
+    ggplot() +
+    geom_violin(aes(x = Status, y = age, color = Status))) +
+  (Classifications_Tread %>%   
+     ggplot() +
+     geom_violin(aes(x = Status, y = weight_kg, color = Status))) +
+  (Classifications_Tread %>% 
+     ggplot() +
+     geom_violin(aes(x = Status, y = height_cm, color = Status))) +
+  (Classifications_Tread %>% 
+     ggplot() +
+     geom_violin(aes(x = Status, y = bmi, color = Status))) +
+  plot_layout(guides = "collect")
+
+
+Classifications_Tread %>% 
+  ggplot() +
+  geom_bar(aes(x = gender, fill = Status), position = position_dodge())
+
+
+# Mannwhitneyfor height, weight, and age between two 
+# looping it in 
+
+Anaylsis_Variables <- c("age", "weight_kg", "height_cm")
+
+
+# Function to perform Kruskal-Wallis and then Dunn's test 
+perform_tests <- function(Anaylsis_Variables, data) { 
+  
+  # Perform Kruskal-Wallis Test
+  MW_test <- wilcox.test(as.formula(paste(Anaylsis_Variables, "~ Status")), data = Classifications_Tread) 
+  MW_effectsize <- wilcox_effsize(as.formula(paste(Anaylsis_Variables, "~ Status")), data = Classifications_Tread) 
+  
+  return(list(Wilcox = MW_test, wilcox_effect = MW_effectsize)) }
+
+
+# Check if significant to proceed with Dunn's test 
+
+# Apply the function to each variable and collect results
+results_wilcox <- lapply(Anaylsis_Variables, perform_tests, data = Classifications_Tread) 
+# Name the list elements based on variables for easier identification 
+names(results_wilcox) <- Anaylsis_Variables
+
+results_wilcox
+
+
+chisq.test(Classifications_Tread$gender, Classifications_Tread$Status)
+chisq.test(Classifications_Tread$race, Classifications_Tread$Status)
+
+
+Classifications_Tread %>% 
+  select(-(Subject_ID))%>% 
+  CreateTableOne(data = ., test = FALSE, argsApprox = FALSE, argsNormal = FALSE, smd = FALSE, addOverall = TRUE, strata = "Status") %>% 
+  summary(digits = 4)
+
+#### Bike-------------------------------------------------------------------------
+
+
+#Getting dataset for Bike
+Bike_Dataset <- Access_Percent_predicted_tidy_Uncorrected %>% 
+  filter(Equation %in% Bike_equations) %>% 
+  filter(Mode == "Bike")
+
+Bike_Dataset$Equation <-  factor(Bike_Dataset$Equation,
+                                 levels =  c("FRIEND", "Wasserman", "Hansen", "Jones", "Neder"))
+
+Bike_Dataset$Subject_ID <- factor(Bike_Dataset$Subject_ID)
+
+Bike_Dataset_wide <- Bike_Dataset %>% 
+  pivot_wider(
+    names_from = Equation, 
+    values_from = c(Percent.Predicted, Predicted, Clinical_Interpretation)
+  )
+
+
+Bike_Interpretation_wide <- Bike_Dataset %>% 
+  pivot_wider(id_cols = Subject_ID, 
+              names_from = Equation, 
+              values_from = Clinical_Interpretation)
+
+
+
+#Plot for Bike
+Bike_Dataset %>% 
+  ggplot(aes(x = Equation, y = Predicted)) +
+  geom_violindot(aes(fill = Equation), binwidth = 100, dots_size = 0.1, color_dots ="black", fill_dots = "black") +
+  # stat_summary(fun = mean, geom = "point", size = 3) +
+  # stat_summary(fun.data = mean_sdl, fun.args = list(mult = 1), geom = "errorbar", width = 0.2) +
+  theme_classic() +
+  scale_fill_jco() +
+  labs(y = expression(Peak~VO[2]~(ml%*%min^-1)), x = "") +
+  theme(
+    legend.position = "none",
+    axis.title = element_text(size = 16),
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 14),
+    axis.text = element_text(size = 14)
+  )
+
+#Bike
+Bike_Dataset %>% 
+  mutate(
+    Clinical_Interpretation = case_when(
+      Clinical_Interpretation == 0 ~ "Preserved Exercise Capacity",
+      Clinical_Interpretation == 1 ~ "Reduced Exercise Capacity",
+      TRUE ~ NA_character_
+    )
+  ) %>% 
+  filter(Equation != "Measured") %>% 
+  ggplot(aes(x = Equation, fill = Clinical_Interpretation)) +
+  geom_bar(position = "fill") +
+  scale_color_manual(values = natparks.pals("Triglav")) +
+  scale_fill_manual(values = natparks.pals("Triglav")) +
+  theme_classic() +
+  labs(y = "Proportion of Subjects", x = "", fill = "Clinical Interpretation") 
+
+
+# Agreement plots for BIKE
+
+# "FvW, FvH, FvJ, FvN, WvH, WvJ, WvN, HvJ, HvN, JvN"
+
+# FvW:
+
+AccessCPET_Uncorrected %>%  
+  mutate(
+    gender = case_when(
+      gender == 1 ~ "Male",
+      gender == 2 ~ "Female",
+      TRUE ~ NA_character_
+    )
+  ) %>%
+  filter(Mode == "Bike") %>% 
+  ggplot() +
+  geom_point(aes(y = FRIEND_Percent.Predicted, x = Wasserman_Percent.Predicted, color = BMI_cat, shape = gender)) +
+  geom_vline(xintercept = 80, linetype = "dashed", color = "black", size = 0.8, alpha = 0.5) +
+  geom_hline(yintercept = 80, linetype = "dashed", color = "black", size = 0.8, alpha = 0.5) +
+  labs(title = "FRIEND to Wasserman", y = "% Predicted: FRIEND ", 
+       x = "% Predicted: Wasserman", color = "BMI Category", shape = "Gender") +
+  theme_classic() +
+  scale_color_manual(values = natparks.pals("Triglav")) +
+  scale_fill_manual(values = natparks.pals("Triglav")) +
+  scale_x_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
+  scale_y_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
+  geom_text(label = "+ , -", x = 40, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "- , +", x = 140, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "+ , +", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "- , -", x = 40, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  theme(
+    legend.position = "none",
+    axis.title = element_text(size = 16),
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 14),
+    axis.text = element_text(size = 14)
+  )
+
+
+# FvH:
+
+AccessCPET_Uncorrected %>%  
+  mutate(
+    gender = case_when(
+      gender == 1 ~ "Male",
+      gender == 2 ~ "Female",
+      TRUE ~ NA_character_
+    )
+  ) %>%
+  filter(Mode == "Bike") %>% 
+  ggplot() +
+  geom_point(aes(y = FRIEND_Percent.Predicted, x = Hansen_Percent.Predicted, color = BMI_cat, shape = gender)) +
+  geom_vline(xintercept = 80, linetype = "dashed", color = "black", size = 0.8, alpha = 0.5) +
+  geom_hline(yintercept = 80, linetype = "dashed", color = "black", size = 0.8, alpha = 0.5) +
+  labs(title = "FRIEND to Hansen", y = "% Predicted: FRIEND ", 
+       x = "% Predicted: Hansen", color = "BMI Category", shape = "Gender") +
+  theme_classic() +
+  scale_color_manual(values = natparks.pals("Triglav")) +
+  scale_fill_manual(values = natparks.pals("Triglav")) +
+  scale_x_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
+  scale_y_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
+  geom_text(label = "+ , -", x = 40, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "- , +", x = 140, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "+ , +", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "- , -", x = 40, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  theme(
+    legend.position = "none",
+    axis.title = element_text(size = 16),
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 14),
+    axis.text = element_text(size = 14)
+  )
+
+
+
+# FvJ:
+
+
+AccessCPET_Uncorrected %>%  
+  mutate(
+    gender = case_when(
+      gender == 1 ~ "Male",
+      gender == 2 ~ "Female",
+      TRUE ~ NA_character_
+    )
+  ) %>%
+  filter(Mode == "Bike") %>% 
+  ggplot() +
+  geom_point(aes(y = FRIEND_Percent.Predicted, x = Jones_Percent.Predicted, color = BMI_cat, shape = gender)) +
+  geom_vline(xintercept = 80, linetype = "dashed", color = "black", size = 0.8, alpha = 0.5) +
+  geom_hline(yintercept = 80, linetype = "dashed", color = "black", size = 0.8, alpha = 0.5) +
+  labs(title = "FRIEND to Jones", y = "% Predicted: FRIEND ", 
+       x = "% Predicted: Jones", color = "BMI Category", shape = "Gender") +
+  theme_classic() +
+  scale_color_manual(values = natparks.pals("Triglav")) +
+  scale_fill_manual(values = natparks.pals("Triglav")) +
+  scale_x_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
+  scale_y_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
+  geom_text(label = "+ , -", x = 40, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "- , +", x = 140, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "+ , +", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "- , -", x = 40, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  theme(
+    legend.position = "none",
+    axis.title = element_text(size = 16),
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 14),
+    axis.text = element_text(size = 14)
+  )
+
+
+
+# FvN:
+
+
+AccessCPET_Uncorrected %>%  
+  mutate(
+    gender = case_when(
+      gender == 1 ~ "Male",
+      gender == 2 ~ "Female",
+      TRUE ~ NA_character_
+    )
+  ) %>%
+  filter(Mode == "Bike") %>% 
+  ggplot() +
+  geom_point(aes(y = FRIEND_Percent.Predicted, x = Neder_Percent.Predicted, color = BMI_cat, shape = gender)) +
+  geom_vline(xintercept = 80, linetype = "dashed", color = "black", size = 0.8, alpha = 0.5) +
+  geom_hline(yintercept = 80, linetype = "dashed", color = "black", size = 0.8, alpha = 0.5) +
+  labs(title = "FRIEND to Neder", y = "% Predicted: FRIEND ", 
+       x = "% Predicted: Neder", color = "BMI Category", shape = "Gender") +
+  theme_classic() +
+  scale_color_manual(values = natparks.pals("Triglav")) +
+  scale_fill_manual(values = natparks.pals("Triglav")) +
+  scale_x_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
+  scale_y_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
+  geom_text(label = "+ , -", x = 40, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "- , +", x = 140, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "+ , +", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "- , -", x = 40, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  theme(
+    legend.position = "none",
+    axis.title = element_text(size = 16),
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 14),
+    axis.text = element_text(size = 14)
+  )
+
+#WvH
+
+AccessCPET_Uncorrected %>%  
+  mutate(
+    gender = case_when(
+      gender == 1 ~ "Male",
+      gender == 2 ~ "Female",
+      TRUE ~ NA_character_
+    )
+  ) %>%
+  filter(Mode == "Bike") %>% 
+  ggplot() +
+  geom_point(aes(x = Hansen_Percent.Predicted, y = Wasserman_Percent.Predicted, color = BMI_cat, shape = gender)) +
+  geom_vline(xintercept = 80, linetype = "dashed", color = "black", size = 0.8, alpha = 0.5) +
+  geom_hline(yintercept = 80, linetype = "dashed", color = "black", size = 0.8, alpha = 0.5) +
+  labs(title = "Wasserman to Hansen", y = "% Predicted: Wasserman ", 
+       x = "% Predicted: Hansen", color = "BMI Category", shape = "Gender") +
+  theme_classic() +
+  scale_color_manual(values = natparks.pals("Triglav")) +
+  scale_fill_manual(values = natparks.pals("Triglav")) +
+  scale_x_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
+  scale_y_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
+  geom_text(label = "+ , -", x = 40, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "- , +", x = 140, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "+ , +", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "- , -", x = 40, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  theme(
+    legend.position = "none",
+    axis.title = element_text(size = 16),
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 14),
+    axis.text = element_text(size = 14)
+  )
+
+#WvJ
+
+AccessCPET_Uncorrected %>%  
+  mutate(
+    gender = case_when(
+      gender == 1 ~ "Male",
+      gender == 2 ~ "Female",
+      TRUE ~ NA_character_
+    )
+  ) %>%
+  filter(Mode == "Bike") %>% 
+  ggplot() +
+  geom_point(aes(x = Jones_Percent.Predicted, y = Wasserman_Percent.Predicted, color = BMI_cat, shape = gender)) +
+  geom_vline(xintercept = 80, linetype = "dashed", color = "black", size = 0.8, alpha = 0.5) +
+  geom_hline(yintercept = 80, linetype = "dashed", color = "black", size = 0.8, alpha = 0.5) +
+  labs(title = "Wasserman to Jones", y = "% Predicted: Wasserman ", 
+       x = "% Predicted: Jones", color = "BMI Category", shape = "Gender") +
+  theme_classic() +
+  scale_color_manual(values = natparks.pals("Triglav")) +
+  scale_fill_manual(values = natparks.pals("Triglav")) +
+  scale_x_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
+  scale_y_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
+  geom_text(label = "+ , -", x = 40, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "- , +", x = 140, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "+ , +", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "- , -", x = 40, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  theme(
+    legend.position = "none",
+    axis.title = element_text(size = 16),
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 14),
+    axis.text = element_text(size = 14)
+  )
+
+#WvN
+
+AccessCPET_Uncorrected %>%  
+  mutate(
+    gender = case_when(
+      gender == 1 ~ "Male",
+      gender == 2 ~ "Female",
+      TRUE ~ NA_character_
+    )
+  ) %>%
+  filter(Mode == "Bike") %>% 
+  ggplot() +
+  geom_point(aes(x = Neder_Percent.Predicted, y = Wasserman_Percent.Predicted, color = BMI_cat, shape = gender)) +
+  geom_vline(xintercept = 80, linetype = "dashed", color = "black", size = 0.8, alpha = 0.5) +
+  geom_hline(yintercept = 80, linetype = "dashed", color = "black", size = 0.8, alpha = 0.5) +
+  labs(title = "Wasserman to Neder", y = "% Predicted: Wasserman ", 
+       x = "% Predicted: Neder", color = "BMI Category", shape = "Gender") +
+  theme_classic() +
+  scale_color_manual(values = natparks.pals("Triglav")) +
+  scale_fill_manual(values = natparks.pals("Triglav")) +
+  scale_x_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
+  scale_y_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
+  geom_text(label = "+ , -", x = 40, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "- , +", x = 140, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "+ , +", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "- , -", x = 40, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  theme(
+    legend.position = "none",
+    axis.title = element_text(size = 16),
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 14),
+    axis.text = element_text(size = 14)
+  )
+
+
+#HvJ
+
+AccessCPET_Uncorrected %>%  
+  mutate(
+    gender = case_when(
+      gender == 1 ~ "Male",
+      gender == 2 ~ "Female",
+      TRUE ~ NA_character_
+    )
+  ) %>%
+  filter(Mode == "Bike") %>% 
+  ggplot() +
+  geom_point(aes(x = Jones_Percent.Predicted, y = Hansen_Percent.Predicted, color = BMI_cat, shape = gender)) +
+  geom_vline(xintercept = 80, linetype = "dashed", color = "black", size = 0.8, alpha = 0.5) +
+  geom_hline(yintercept = 80, linetype = "dashed", color = "black", size = 0.8, alpha = 0.5) +
+  labs(title = "Hansen to Jones", y = "% Predicted: Hansen ", 
+       x = "% Predicted: Jones", color = "BMI Category", shape = "Gender") +
+  theme_classic() +
+  scale_color_manual(values = natparks.pals("Triglav")) +
+  scale_fill_manual(values = natparks.pals("Triglav")) +
+  scale_x_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
+  scale_y_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
+  geom_text(label = "+ , -", x = 40, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "- , +", x = 140, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "+ , +", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "- , -", x = 40, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  theme(
+    legend.position = "none",
+    axis.title = element_text(size = 16),
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 14),
+    axis.text = element_text(size = 14)
+  )
+
+
+#HvsN
+AccessCPET_Uncorrected %>%  
+  mutate(
+    gender = case_when(
+      gender == 1 ~ "Male",
+      gender == 2 ~ "Female",
+      TRUE ~ NA_character_
+    )
+  ) %>%
+  filter(Mode == "Bike") %>% 
+  ggplot() +
+  geom_point(aes(y = Hansen_Percent.Predicted, x = Neder_Percent.Predicted, color = BMI_cat, shape = gender)) +
+  geom_vline(xintercept = 80, linetype = "dashed", color = "black", size = 0.8, alpha = 0.5) +
+  geom_hline(yintercept = 80, linetype = "dashed", color = "black", size = 0.8, alpha = 0.5) +
+  labs(title = "Hansen to Neder", y = "% Predicted: Neder ", 
+       x = "% Predicted: Hansen", color = "BMI Category", shape = "Gender") +
+  theme_classic() +
+  scale_color_manual(values = natparks.pals("Triglav")) +
+  scale_fill_manual(values = natparks.pals("Triglav")) +
+  scale_x_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
+  scale_y_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
+  geom_text(label = "+ , -", x = 40, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "- , +", x = 140, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "+ , +", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "- , -", x = 40, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  theme(
+    legend.position = "none",
+    axis.title = element_text(size = 16),
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 14),
+    axis.text = element_text(size = 14)
+  )
+
+
+#JvsN
+AccessCPET_Uncorrected %>%  
+  mutate(
+    gender = case_when(
+      gender == 1 ~ "Male",
+      gender == 2 ~ "Female",
+      TRUE ~ NA_character_
+    )
+  ) %>%
+  filter(Mode == "Bike") %>% 
+  ggplot() +
+  geom_point(aes(y = Jones_Percent.Predicted, x = Neder_Percent.Predicted, color = BMI_cat, shape = gender)) +
+  geom_vline(xintercept = 80, linetype = "dashed", color = "black", size = 0.8, alpha = 0.5) +
+  geom_hline(yintercept = 80, linetype = "dashed", color = "black", size = 0.8, alpha = 0.5) +
+  labs(title = "Jones to Neder", y = "% Predicted: Jones ", 
+       x = "% Predicted: Neder", color = "BMI Category", shape = "Gender") +
+  theme_classic() +
+  scale_color_manual(values = natparks.pals("Triglav")) +
+  scale_fill_manual(values = natparks.pals("Triglav")) +
+  scale_x_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
+  scale_y_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
+  geom_text(label = "+ , -", x = 40, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "- , +", x = 140, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "+ , +", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "- , -", x = 40, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  theme(
+    legend.position = "none",
+    axis.title = element_text(size = 16),
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 14),
+    axis.text = element_text(size = 14)
+  )
+
+
+
+
+# Analayis for Bike
+
+
+friedman.test(Predicted ~ Equation | Subject_ID, data = Bike_Dataset)
+friedman_effsize(Predicted ~ Equation | Subject_ID, data = Bike_Dataset)
+
+
+
+
+conover_Bike <- frdAllPairsExactTest(y = Bike_Dataset$Predicted,
+                                     groups = Bike_Dataset$Equation,
+                                     blocks = Bike_Dataset$Subject_ID,
+                                     p.adjust.methods = "bonferroni")
+conover_Bike
+
+
+Access_equations_Bike <- colnames(Bike_Interpretation_wide)[-1]  #  first column is Subject_ID
+
+for (i in 1:(length(Access_equations_Bike)-1)){
+  for (j in (i+1):length(Access_equations_Bike)){
+    
+    #creating the pair name ( F vs W)
+    pair_name <- paste(Access_equations_Bike[i], Access_equations_Bike[j], sep = "_")
+    
+    #creating a new variable for the pair
+    
+    Bike_Interpretation_wide <- Bike_Interpretation_wide %>% 
+      mutate(!!pair_name := factor(case_when(
+        .data[[Access_equations_Bike[i]]] == 0 & .data[[Access_equations_Bike[j]]] == 0 ~ 0, # both normal 
+        .data[[Access_equations_Bike[i]]] == 1 & .data[[Access_equations_Bike[j]]] == 1 ~ 0, # both abnormal 
+        .data[[Access_equations_Bike[i]]] == 1 & .data[[Access_equations_Bike[j]]] == 0 ~ -1, # reclassified as normal
+        .data[[Access_equations_Bike[i]]] == 0 & .data[[Access_equations_Bike[j]]] == 1 ~ 1, # reclassified as abnormal
+        TRUE ~ NA_real_))
+      )
+  }
+}
+
+Bike_Interpretation_wide %>% 
+  select(-(Subject_ID))%>% 
+  CreateTableOne(data = ., test = FALSE, argsApprox = FALSE, argsNormal = FALSE, smd = FALSE, addOverall = TRUE) %>% 
+  summary(digits = 4)
+
+
+
+#Kappa analysis
+
+
+# Initialize an empty matrix to store kappa values
+kappa_matrix <- matrix(NA, nrow = length(Access_equations_Bike), ncol = length(Access_equations_Bike), dimnames = list(Access_equations_Bike, Access_equations_Bike))
+
+
+
+# Loop through each pair of equations and calculate Kappa
+
+
+for (i in 1:(length(Access_equations_Bike)-1)) {
+  for (j in (i+1):length(Access_equations_Bike)) {
+    
+    eq1 <- Access_Interpertation_wide_Uncorrected[[Access_equations_Bike[i]]]
+    eq2 <- Access_Interpertation_wide_Uncorrected[[Access_equations_Bike[j]]]
+    
+    Access_kappa_results <- kappa2(cbind(eq1, eq2))
+    cat("Kappa for", Access_equations_Bike[i], "vs", Access_equations_Bike[j], ":\n")
+    
+    print(Access_kappa_results)
+    cat("\n")
+    
+    kappa_matrix[i, j ] <- round(Access_kappa_results$value, digits = 2)
+    kappa_matrix[j, i ] <- round(Access_kappa_results$value, digits = 2)
+    
+    
+  }
+}
+
+# table(Bike_Dataset_wide$FRIEND, Bike_Dataset_wide$Hansen)
+# table(Bike_Dataset_wide$FRIEND, Bike_Dataset_wide$Jones)
+# table(Bike_Dataset_wide$FRIEND, Bike_Dataset_wide$Neder)
+# table(Bike_Dataset_wide$Hansen, Bike_Dataset_wide$Jones)
+# table(Bike_Dataset_wide$Hansen, Bike_Dataset_wide$Neder)
+# table(Bike_Dataset_wide$Jones, Bike_Dataset_wide$Neder)
+
+
+#Assesment of what is driving the difference for just Bike
+
+# "FvW, FvH, FvJ, FvN, WvH, WvJ, WvN, HvJ, HvN, JvN"
+
+Classifications_Bike <- Bike_Interpretation_wide %>% 
+  select(c(Subject_ID, FRIEND, Wasserman, Hansen, Jones, Neder)) %>% 
+  mutate(
+    FvW = case_when(
+      FRIEND == "1" & Wasserman == "1" ~ 0,
+      FRIEND == "0" & Wasserman == "0" ~ 0,
+      FRIEND == "1" & Wasserman == "0" ~ -1,
+      FRIEND == "0" & Wasserman == "1" ~ 1,
+      TRUE ~ NA_real_
+    ),
+    FvH = case_when(
+      FRIEND == "1" & Hansen == "1" ~ 0,
+      FRIEND == "0" & Hansen == "0" ~ 0,
+      FRIEND == "1" & Hansen == "0" ~ -1,
+      FRIEND == "0" & Hansen == "1" ~ 1,
+      TRUE ~ NA_real_
+    ),
+    FvJ = case_when(
+      FRIEND == "1" & Jones == "1" ~ 0,
+      FRIEND == "0" & Jones == "0" ~ 0,
+      FRIEND == "1" & Jones == "0" ~ -1,
+      FRIEND == "0" & Jones == "1" ~ 1,
+      TRUE ~ NA_real_
+    ),
+    FvN = case_when(
+      FRIEND == "1" & Neder == "1" ~ 0,
+      FRIEND == "0" & Neder == "0" ~ 0,
+      FRIEND == "1" & Neder == "0" ~ -1,
+      FRIEND == "0" & Neder == "1" ~ 1,
+      TRUE ~ NA_real_
+    ),
+    WvH = case_when(
+      Wasserman == "1" & Hansen == "1" ~ 0,
+      Wasserman == "0" & Hansen == "0" ~ 0,
+      Wasserman == "1" & Hansen == "0" ~ -1,
+      Wasserman == "0" & Hansen == "1" ~ 1,
+      TRUE ~ NA_real_
+    ),
+    WvJ = case_when(
+      Wasserman == "1" & Jones == "1" ~ 0,
+      Wasserman == "0" & Jones == "0" ~ 0,
+      Wasserman == "1" & Jones == "0" ~ -1,
+      Wasserman == "0" & Jones == "1" ~ 1,
+      TRUE ~ NA_real_
+    ),
+    WvN = case_when(
+      Wasserman == "1" & Neder == "1" ~ 0,
+      Wasserman == "0" & Neder == "0" ~ 0,
+      Wasserman == "1" & Neder == "0" ~ -1,
+      Wasserman == "0" & Neder == "1" ~ 1,
+      TRUE ~ NA_real_
+    ),
+    HvJ = case_when(
+      Hansen == "1" & Jones == "1" ~ 0,
+      Hansen == "0" & Jones == "0" ~ 0,
+      Hansen == "1" & Jones == "0" ~ -1,
+      Hansen == "0" & Jones == "1" ~ 1,
+      TRUE ~ NA_real_
+    ),
+    HvN = case_when(
+      Hansen == "1" & Neder == "1" ~ 0,
+      Hansen == "0" & Neder == "0" ~ 0,
+      Hansen == "1" & Neder == "0" ~ -1,
+      Hansen == "0" & Neder == "1" ~ 1,
+      TRUE ~ NA_real_
+    ),
+    JvN = case_when(
+      Jones == "1" & Neder == "1" ~ 0,
+      Jones == "0" & Neder == "0" ~ 0,
+      Jones == "1" & Neder == "0" ~ -1,
+      Jones == "0" & Neder == "1" ~ 1,
+      TRUE ~ NA_real_
+    ))
+
+
+Classifications_Bike <- 
+  merge(
+    AccessCPET_Uncorrected[,c("Subject_ID", "gender",  "Mode" , "race" ,"age", "weight_kg", "height_cm", "bmi", "FRIEND_Predicted", "Bruce_Predicted")],
+    Classifications_Bike,
+    by = "Subject_ID"
+  )
+
+
+columns_check <- c("FvW", "FvH", "FvJ", "FvN", "WvH", "WvJ", "WvN", "HvJ", "HvN", "JvN")
+
+Classifications_Bike <- Classifications_Bike %>% 
+  mutate(
+    count_NoChange = rowSums(Classifications_Bike[,columns_check] == 0, na.rm = TRUE),
+    count_Reduced = rowSums(Classifications_Bike[,columns_check] == -1, na.rm = TRUE),
+    count_Normal = rowSums(Classifications_Bike[,columns_check] == 1, na.rm = TRUE)
+  )
+
+Classifications_Bike %>%
+  count(count_NoChange == 10) 
+
+#comparing (age + sex + weight + height) between two  groups
+
+
+# 0) No change (Sum = 10)
+# 1) has some changes
+
+Classifications_Bike <- Classifications_Bike %>% 
+  mutate(
+    Status = factor(case_when(
+      count_NoChange == 10 ~ 0,
+      count_NoChange != 10 ~ 1
+    ))
+  )
+
+
+Classifications_Bike %>% 
+  ggplot() +
+  geom_bar(aes(x = gender, fill = Status), position = position_dodge())
+
+
+
+
+#plots:
+(Classifications_Bike %>% 
+    ggplot() +
+    geom_violin(aes(x = Status, y = age, color = Status))) +
+  (Classifications_Bike %>%   
+     ggplot() +
+     geom_violin(aes(x = Status, y = weight_kg, color = Status))) +
+  (Classifications_Bike %>% 
+     ggplot() +
+     geom_violin(aes(x = Status, y = height_cm, color = Status))) +
+  (Classifications_Bike %>% 
+     ggplot() +
+     geom_violin(aes(x = Status, y = bmi, color = Status))) +
+  plot_layout(guides = "collect")
+
+
+# Mannwhitneyfor height, weight, and age between two 
+# looping it in 
+
+Anaylsis_Variables <- c("age", "weight_kg", "height_cm")
+
+
+# Function to perform Kruskal-Wallis and then Dunn's test 
+perform_tests <- function(Anaylsis_Variables, data) { 
+  
+  # Perform Kruskal-Wallis Test
+  MW_test <- wilcox.test(as.formula(paste(Anaylsis_Variables, "~ Status")), data = Classifications_Bike) 
+  MW_effectsize <- wilcox_effsize(as.formula(paste(Anaylsis_Variables, "~ Status")), data = Classifications_Bike) 
+  
+  return(list(Wilcox = MW_test, wilcox_effect = MW_effectsize)) }
+
+
+# Check if significant to proceed with Dunn's test 
+
+# Apply the function to each variable and collect results
+results_wilcox <- lapply(Anaylsis_Variables, perform_tests, data = Classifications_Bike) 
+# Name the list elements based on variables for easier identification 
+names(results_wilcox) <- Anaylsis_Variables
+
+results_wilcox
+
+
+chisq.test(Classifications_Bike$gender, Classifications_Bike$Status)
+chisq.test(Classifications_Bike$race, Classifications_Bike$Status)
+
+
+# Mean values
+Classifications_Bike %>% 
+  select(-(Subject_ID))%>% 
+  CreateTableOne(data = ., test = FALSE, argsApprox = FALSE, argsNormal = FALSE, smd = FALSE, addOverall = TRUE, strata = "Status") %>% 
+  summary(digits = 4)
+
+
+
+
+# Corrected Dataset (x1.11 or x.89) ---------------------------------------
+#### Plots based on corrected dataset --------------------------------------------------------
+
+# plots to look at difference in percent predicted and predicted VO2
+# Using the Corrected dataset below
+
+Access_Percent_predicted_tidy_Corrected %>% 
+  filter(Equation != "Measured") %>% 
+  ggplot(aes(x = Percent.Predicted, color = Equation)) +
+  geom_density()
+
+
+#Figure 1 of paper: Violin plot of d Predicted Peak VȮ2 using the 5 equations.
+Access_Percent_predicted_tidy_Corrected %>% 
+  filter(Equation != "Measured") %>% 
+  ggplot(aes(x = Equation, y = Percent.Predicted)) +
+  geom_violindot(aes(fill = Equation), binwidth = 5, dots_size = 0.1, color_dots ="black", fill_dots = "black") +
+  theme_classic() +
+  scale_fill_jco() +
+  labs(y = "Percent Predicted", x = "") +
+  theme(
+    axis.title = element_text(size = 16),
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 14),
+    axis.text = element_text(size = 14)
+  )
+
+# ggsave("Violin_VO2_PeakPercentPredicited.png",
+#        path = "R:/AirHazardsCenter/AHBPCE-PDCEN_site data/Working Analyses/CPET Equations/Plots" )
+
+#Figure 3 of paper: Violin plot of % Predicted VȮ2 across equations.
+Access_Percent_predicted_tidy_Corrected %>% 
+  ggplot(aes(x = Equation, y = Predicted)) +
+  geom_violindot(aes(fill = Equation), binwidth = 100, dots_size = 0.1, color_dots ="black", fill_dots = "black") +
+  # stat_summary(fun = mean, geom = "point", size = 3) +
+  # stat_summary(fun.data = mean_sdl, fun.args = list(mult = 1), geom = "errorbar", width = 0.2) +
+  theme_classic() +
+  scale_fill_jco() +
+  labs(y = expression(Peak~VO[2]~(ml%*%min^-1)), x = "") +
+  theme(
+    legend.position = "none",
+    axis.title = element_text(size = 16),
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 14),
+    axis.text = element_text(size = 14)
+  )
+
+# ggsave("Violin_VO2_predicted.png",
+#        path = "R:/AirHazardsCenter/AHBPCE-PDCEN_site data/Working Analyses/CPET Equations/Plots" )
+
+
+
+#plot to look at differences in classification between each equation
+
+Access_Percent_predicted_tidy_Corrected %>% 
+  mutate(
+    Clinical_Interpretation = case_when(
+      Clinical_Interpretation == 0 ~ "Preserved Exercise Capacity",
+      Clinical_Interpretation == 1 ~ "Reduced Exercise Capacity",
+      TRUE ~ NA_character_
+    )
+  ) %>% 
+  filter(Equation != "Measured") %>% 
+  ggplot(aes(x = Equation, fill = Clinical_Interpretation)) +
+  geom_bar(position = "fill") +
+  scale_color_manual(values = natparks.pals("Triglav")) +
+  scale_fill_manual(values = natparks.pals("Triglav")) +
+  theme_classic() +
+  labs(y = "Proportion of Subjects", x = "", fill = "Clinical Interpretation") 
+
+  # ggsave("ClinicalInterpretation.png",
+  #      path = "R:/AirHazardsCenter/AHBPCE-PDCEN_site data/Working Analyses/CPET Equations/Plots" )
+
+
+#agreement plots
+
+
+# FRIEND to Wasserman
+table(Access_Interpertation_wide_Corrected$FRIEND, Access_Interpertation_wide_Corrected$Wasserman)
+
+  
+F_vs_W <- AccessCPET_Corrected %>%  
+  mutate(
+    gender = case_when(
+      gender == 1 ~ "Male",
+      gender == 2 ~ "Female",
+      TRUE ~ NA_character_
+    )
+  ) %>% 
+  ggplot() +
+  geom_point(aes(x = Wasserman_Percent.Predicted, y = FRIEND_Percent.Predicted, color = BMI_cat, shape = gender)) +
+  geom_vline(xintercept = 80, linetype = "dashed", color = "black", size = 0.8, alpha = 0.5) +
+  geom_hline(yintercept = 80, linetype = "dashed", color = "black", size = 0.8, alpha = 0.5) +
+  labs(title = "FRIEND to Wasserman", y = "% Predicted: FRIEND ", 
+       x = "% Predicted: Wasserman", color = "BMI Category", shape = "Gender") +
+  theme_classic() +
+  scale_color_manual(values = natparks.pals("Triglav")) +
+  scale_fill_manual(values = natparks.pals("Triglav")) +
+  scale_x_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
+  scale_y_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
+  geom_text(label = "+ | -", x = 40, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "- , +", x = 140, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "+ , +", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "- , -", x = 40, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  theme(
+    legend.position = "none",
+    axis.title = element_text(size = 16),
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 14),
+    axis.text = element_text(size = 14)
+  )
+# ggsave("Agreement_FvsW.png",
+#        path = "R:/AirHazardsCenter/AHBPCE-PDCEN_site data/Working Analyses/CPET Equations/Plots" )
+
+
+
+# FRIEND to Hansen
+
+table(Access_Interpertation_wide_Corrected$FRIEND, Access_Interpertation_wide_Corrected$Hansen)
+
+F_vs_H <- AccessCPET_Corrected %>%  
+  mutate(
+    gender = case_when(
+      gender == 1 ~ "Male",
+      gender == 2 ~ "Female",
+      TRUE ~ NA_character_
+    )
+  ) %>% 
+  ggplot() +
+  geom_point(aes(x = Hansen_Percent.Predicted, y = FRIEND_Percent.Predicted, color = BMI_cat, shape = gender)) +
+  geom_vline(xintercept = 80, linetype = "dashed", color = "black", size = 0.8, alpha = 0.5) +
+  geom_hline(yintercept = 80, linetype = "dashed", color = "black", size = 0.8, alpha = 0.5) +
+  labs(title = "FRIEND to Hansen", y = "% Predicted: FRIEND ", 
+       x = "% Predicted: Hansen", color = "BMI Category", shape = "Gender") +
+  theme_classic() +
+  scale_color_manual(values = natparks.pals("Triglav")) +
+  scale_fill_manual(values = natparks.pals("Triglav")) +
+  scale_x_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
+  scale_y_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
+  geom_text(label = "+ , -", x = 40, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "- , +", x = 140, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "+ , +", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "- , -", x = 40, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  theme(
+    legend.position = "none",
+    axis.title = element_text(size = 16),
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 14),
+    axis.text = element_text(size = 14)
+  )
+
+# ggsave("Agreement_FvsH.png",
+#        path = "R:/AirHazardsCenter/AHBPCE-PDCEN_site data/Working Analyses/CPET Equations/Plots" )
+
+
+# FRIEND to Bruce
+
+table(Access_Interpertation_wide_Corrected$FRIEND, Access_Interpertation_wide_Corrected$Bruce)
+
+F_vs_B <- AccessCPET_Corrected %>%  
+  mutate(
+    gender = case_when(
+      gender == 1 ~ "Male",
+      gender == 2 ~ "Female",
+      TRUE ~ NA_character_
+    )
+  ) %>% 
+  ggplot() +
+  geom_point(aes(x = Bruce_Percent.Predicted, y = FRIEND_Percent.Predicted, color = BMI_cat, shape = gender)) +
+  geom_vline(xintercept = 80, linetype = "dashed", color = "black", size = 0.8, alpha = 0.5) +
+  geom_hline(yintercept = 80, linetype = "dashed", color = "black", size = 0.8, alpha = 0.5) +
+  labs(title = "FRIEND to Bruce", y = "% Predicted: FRIEND ", 
+       x = "% Predicted: Bruce", color = "BMI Category", shape = "Gender") +
+  theme_classic() +
+  scale_color_manual(values = natparks.pals("Triglav")) +
+  scale_fill_manual(values = natparks.pals("Triglav")) +
+  scale_x_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
+  scale_y_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
+  geom_text(label = "+ , -", x = 40, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "- , +", x = 140, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "+ , +", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "- , -", x = 40, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  theme(
+    legend.position = "none",
+    axis.title = element_text(size = 16),
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 14),
+    axis.text = element_text(size = 14)
+  )
+
+# ggsave("Agreement_FvsB.png",
+#        path = "R:/AirHazardsCenter/AHBPCE-PDCEN_site data/Working Analyses/CPET Equations/Plots" )
+
+
+
+# FRIEND to Jones
+
+table(Access_Interpertation_wide_Corrected$FRIEND, Access_Interpertation_wide_Corrected$Jones)
+
+F_vs_J <- AccessCPET_Corrected %>%  
+  mutate(
+    gender = case_when(
+      gender == 1 ~ "Male",
+      gender == 2 ~ "Female",
+      TRUE ~ NA_character_
+    )
+  ) %>% 
+  ggplot() +
+  geom_point(aes(x = Jones_Percent.Predicted, y = FRIEND_Percent.Predicted, color = BMI_cat, shape = gender)) +
+  geom_vline(xintercept = 80, linetype = "dashed", color = "black", size = 0.8, alpha = 0.5) +
+  geom_hline(yintercept = 80, linetype = "dashed", color = "black", size = 0.8, alpha = 0.5) +
+  labs(title = "FRIEND to Jones", y = "% Predicted: FRIEND ", 
+       x = "% Predicted: Jones", color = "BMI Category", shape = "Gender") +
+  theme_classic() +
+  scale_color_manual(values = natparks.pals("Triglav")) +
+  scale_fill_manual(values = natparks.pals("Triglav")) +
+  scale_x_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
+  scale_y_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
+  geom_text(label = "+ , -", x = 40, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "- , +", x = 140, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "+ , +", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "- , -", x = 40, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  theme(
+    legend.position = "none",
+    axis.title = element_text(size = 16),
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 14),
+    axis.text = element_text(size = 14)
+  )
+
+# ggsave("Agreement_FvsJ.png",
+#        path = "R:/AirHazardsCenter/AHBPCE-PDCEN_site data/Working Analyses/CPET Equations/Plots" )
+
+
+#FRIEND to Neder
+table(Access_Interpertation_wide_Corrected$FRIEND, Access_Interpertation_wide_Corrected$Neder)
+
+
+F_vs_N <- AccessCPET_Corrected %>%  
+  mutate(
+    gender = case_when(
+      gender == 1 ~ "Male",
+      gender == 2 ~ "Female",
+      TRUE ~ NA_character_
+    )
+  ) %>% 
+  ggplot() +
+  geom_point(aes(x = Neder_Percent.Predicted, y = FRIEND_Percent.Predicted, color = BMI_cat, shape = gender)) +
+  geom_vline(xintercept = 80, linetype = "dashed", color = "black", size = 0.8, alpha = 0.5) +
+  geom_hline(yintercept = 80, linetype = "dashed", color = "black", size = 0.8, alpha = 0.5) +
+  labs(title = "FRIEND to Neder", y = "% Predicted: FRIEND", 
+       x = "% Predicted: Neder", color = "BMI Category", shape = "Gender") +
+  theme_classic() +
+  scale_color_manual(values = natparks.pals("Triglav")) +
+  scale_fill_manual(values = natparks.pals("Triglav")) +
+  scale_x_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
+  scale_y_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
+  geom_text(label = "+ , -", x = 40, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "- , +", x = 140, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "+ , +", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "- , -", x = 40, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  theme(
+    legend.position = "none",
+    axis.title = element_text(size = 16),
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 14),
+    axis.text = element_text(size = 14)
+  )
+
+
+ #Wasserman to Hansen
+
+table(Access_Interpertation_wide_Corrected$Wasserman, Access_Interpertation_wide_Corrected$Hansen)
+
+W_vs_H <- AccessCPET_Corrected %>%  
+  mutate(
+    gender = case_when(
+      gender == 1 ~ "Male",
+      gender == 2 ~ "Female",
+      TRUE ~ NA_character_
+    )
+  ) %>% 
+  ggplot() +
+  geom_point(aes(x = Hansen_Percent.Predicted, y = Wasserman_Percent.Predicted, color = BMI_cat, shape = gender)) +
+  geom_vline(xintercept = 80, linetype = "dashed", color = "black", size = 0.8, alpha = 0.5) +
+  geom_hline(yintercept = 80, linetype = "dashed", color = "black", size = 0.8, alpha = 0.5) +
+  labs(title = "Wasserman to Hansen", y = "% Predicted: Wasserman ", 
+       x = "% Predicted: Hansen", color = "BMI Category", shape = "Gender") +
+  theme_classic() +
+  scale_color_manual(values = natparks.pals("Triglav")) +
+  scale_fill_manual(values = natparks.pals("Triglav")) +
+  scale_x_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
+  scale_y_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
+  geom_text(label = "+ , -", x = 40, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "- , +", x = 140, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "+ , +", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "- , -", x = 40, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  theme(
+    axis.title = element_text(size = 16),
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 14),
+    axis.text = element_text(size = 14)
+  )
+
+# ggsave("Agreement_WvsH.png",
+#        path = "R:/AirHazardsCenter/AHBPCE-PDCEN_site data/Working Analyses/CPET Equations/Plots" )
+
+
+#Wasserman to Bruce
+
+table(Access_Interpertation_wide_Corrected$Wasserman, Access_Interpertation_wide_Corrected$Bruce)
+
+W_vs_B <- AccessCPET_Corrected %>%  
+  mutate(
+    gender = case_when(
+      gender == 1 ~ "Male",
+      gender == 2 ~ "Female",
+      TRUE ~ NA_character_
+    )
+  ) %>% 
+  ggplot() +
+  geom_point(aes(x = Bruce_Percent.Predicted, y = Wasserman_Percent.Predicted, color = BMI_cat, shape = gender)) +
+  geom_vline(xintercept = 80, linetype = "dashed", color = "black", size = 0.8, alpha = 0.5) +
+  geom_hline(yintercept = 80, linetype = "dashed", color = "black", size = 0.8, alpha = 0.5) +
+  labs(title = "Wasserman to Bruce", y = "% Predicted: Wasserman ", 
+       x = "% Predicted: Bruce", color = "BMI Category", shape = "Gender") +
+  theme_classic() +
+  scale_color_manual(values = natparks.pals("Triglav")) +
+  scale_fill_manual(values = natparks.pals("Triglav")) +
+  scale_x_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
+  scale_y_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
+  geom_text(label = "+ , -", x = 40, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "- , +", x = 140, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "+ , +", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "- , -", x = 40, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  theme(
+    axis.title = element_text(size = 16),
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 14),
+    axis.text = element_text(size = 14)
+  )
+
+# ggsave("Agreement_WvsB.png",
+#        path = "R:/AirHazardsCenter/AHBPCE-PDCEN_site data/Working Analyses/CPET Equations/Plots" )
+
+
+#Wasserman to Jones
+
+table(Access_Interpertation_wide_Corrected$Wasserman, Access_Interpertation_wide_Corrected$Jones)
+
+w_vs_J <- AccessCPET_Corrected %>%  
+  mutate(
+    gender = case_when(
+      gender == 1 ~ "Male",
+      gender == 2 ~ "Female",
+      TRUE ~ NA_character_
+    )
+  ) %>% 
+  ggplot() +
+  geom_point(aes(x = Jones_Percent.Predicted, y = Wasserman_Percent.Predicted, color = BMI_cat, shape = gender)) +
+  geom_vline(xintercept = 80, linetype = "dashed", color = "black", size = 0.8, alpha = 0.5) +
+  geom_hline(yintercept = 80, linetype = "dashed", color = "black", size = 0.8, alpha = 0.5) +
+  labs(title = "Wasserman to Jones", y = "% Predicted: Wasserman ", 
+       x = "% Predicted: Jones", color = "BMI Category", shape = "Gender") +
+  theme_classic() +
+  scale_color_manual(values = natparks.pals("Triglav")) +
+  scale_fill_manual(values = natparks.pals("Triglav")) +
+  scale_x_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
+  scale_y_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
+  geom_text(label = "+ , -", x = 40, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "- , +", x = 140, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "+ , +", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "- , -", x = 40, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  theme(
+    axis.title = element_text(size = 16),
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 14),
+    axis.text = element_text(size = 14)
+  )
+
+# ggsave("Agreement_WvsJ.png",
+#        path = "R:/AirHazardsCenter/AHBPCE-PDCEN_site data/Working Analyses/CPET Equations/Plots" )
+
+
+
+# Wasserman to Neder
+
+table(Access_Interpertation_wide_Corrected$Wasserman, Access_Interpertation_wide_Corrected$Neder)
+
+W_vs_N <- AccessCPET_Corrected %>%  
+  mutate(
+    gender = case_when(
+      gender == 1 ~ "Male",
+      gender == 2 ~ "Female",
+      TRUE ~ NA_character_
+    )
+  ) %>% 
+  ggplot() +
+  geom_point(aes(x = Neder_Percent.Predicted, y = Wasserman_Percent.Predicted, color = BMI_cat, shape = gender)) +
+  geom_vline(xintercept = 80, linetype = "dashed", color = "black", size = 0.8, alpha = 0.5) +
+  geom_hline(yintercept = 80, linetype = "dashed", color = "black", size = 0.8, alpha = 0.5) +
+  labs(title = "Wasserman to Neder", y = "% Predicted: Wasserman ", 
+       x = "% Predicted: Neder", color = "BMI Category", shape = "Gender") +
+  theme_classic() +
+  scale_color_manual(values = natparks.pals("Triglav")) +
+  scale_fill_manual(values = natparks.pals("Triglav")) +
+  scale_x_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
+  scale_y_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
+  geom_text(label = "+ , -", x = 40, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "- , +", x = 140, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "+ , +", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "- , -", x = 40, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  theme(
+    axis.title = element_text(size = 16),
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 14),
+    axis.text = element_text(size = 14)
+  )
+
+
+#Hansen to Bruce
+
+table(Access_Interpertation_wide_Corrected$Hansen, Access_Interpertation_wide_Corrected$Bruce)
+
+H_vs_B <- AccessCPET_Corrected %>%  
+  mutate(
+    gender = case_when(
+      gender == 1 ~ "Male",
+      gender == 2 ~ "Female",
+      TRUE ~ NA_character_
+    )
+  ) %>% 
+  ggplot() +
+  geom_point(aes(x = Bruce_Percent.Predicted, y = Hansen_Percent.Predicted, color = BMI_cat, shape = gender)) +
+  geom_vline(xintercept = 80, linetype = "dashed", color = "black", size = 0.8, alpha = 0.5) +
+  geom_hline(yintercept = 80, linetype = "dashed", color = "black", size = 0.8, alpha = 0.5) +
+  labs(title = "Hansen to Bruce", y = "% Predicted: Hansen ", 
+       x = "% Predicted: Bruce", color = "BMI Category", shape = "Gender") +
+  theme_classic() +
+  scale_color_manual(values = natparks.pals("Triglav")) +
+  scale_fill_manual(values = natparks.pals("Triglav")) +
+  scale_x_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
+  scale_y_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
+  geom_text(label = "+ , -", x = 40, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "- , +", x = 140, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "+ , +", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "- , -", x = 40, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  theme(
+    legend.position = "none",
+    axis.title = element_text(size = 16),
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 14),
+    axis.text = element_text(size = 14)
+  )
+# 
+# ggsave("Agreement_HvsB.png",
+#        path = "R:/AirHazardsCenter/AHBPCE-PDCEN_site data/Working Analyses/CPET Equations/Plots" )
+
+
+#Hansen to Jones
+
+table(Access_Interpertation_wide_Corrected$Hansen, Access_Interpertation_wide_Corrected$Jones)
+
+H_vs_J <- AccessCPET_Corrected %>%  
+  mutate(
+    gender = case_when(
+      gender == 1 ~ "Male",
+      gender == 2 ~ "Female",
+      TRUE ~ NA_character_
+    )
+  ) %>% 
+  ggplot() +
+  geom_point(aes(x = Jones_Percent.Predicted, y = Hansen_Percent.Predicted, color = BMI_cat, shape = gender)) +
+  geom_vline(xintercept = 80, linetype = "dashed", color = "black", size = 0.8, alpha = 0.5) +
+  geom_hline(yintercept = 80, linetype = "dashed", color = "black", size = 0.8, alpha = 0.5) +
+  labs(title = "Hansen to Jones", y = "% Predicted: Hansen ", 
+       x = "% Predicted: Jones", color = "BMI Category", shape = "Gender") +
+  theme_classic() +
+  scale_color_manual(values = natparks.pals("Triglav")) +
+  scale_fill_manual(values = natparks.pals("Triglav")) +
+  scale_x_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
+  scale_y_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
+  geom_text(label = "+ , -", x = 40, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "- , +", x = 140, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "+ , +", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "- , -", x = 40, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  theme(
+    legend.position = "none",
+    axis.title = element_text(size = 16),
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 14),
+    axis.text = element_text(size = 14)
+  )
+
+# ggsave("Agreement_HvsJ.png",
+#        path = "R:/AirHazardsCenter/AHBPCE-PDCEN_site data/Working Analyses/CPET Equations/Plots" )
+
+
+#Hansen to Neder
+
+table(Access_Interpertation_wide_Corrected$Hansen, Access_Interpertation_wide_Corrected$Neder)
+
+H_vs_N <- AccessCPET_Corrected %>%  
+  mutate(
+    gender = case_when(
+      gender == 1 ~ "Male",
+      gender == 2 ~ "Female",
+      TRUE ~ NA_character_
+    )
+  ) %>% 
+  ggplot() +
+  geom_point(aes(x = Neder_Percent.Predicted, y = Hansen_Percent.Predicted, color = BMI_cat, shape = gender)) +
+  geom_vline(xintercept = 80, linetype = "dashed", color = "black", size = 0.8, alpha = 0.5) +
+  geom_hline(yintercept = 80, linetype = "dashed", color = "black", size = 0.8, alpha = 0.5) +
+  labs(title = "Hansen to Neder", y = "% Predicted: Hansen ", 
+       x = "% Predicted: Neder", color = "BMI Category", shape = "Gender") +
+  theme_classic() +
+  scale_color_manual(values = natparks.pals("Triglav")) +
+  scale_fill_manual(values = natparks.pals("Triglav")) +
+  scale_x_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
+  scale_y_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
+  geom_text(label = "+ , -", x = 40, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "- , +", x = 140, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "+ , +", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "- , -", x = 40, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  theme(
+    legend.position = "none",
+    axis.title = element_text(size = 16),
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 14),
+    axis.text = element_text(size = 14)
+  )
+
+
+#Bruce to Jones
+
+table(Access_Interpertation_wide_Corrected$Bruce, Access_Interpertation_wide_Corrected$Jones)
+
+B_vs_J <- AccessCPET_Corrected %>%  
+  mutate(
+    gender = case_when(
+      gender == 1 ~ "Male",
+      gender == 2 ~ "Female",
+      TRUE ~ NA_character_
+    )
+  ) %>% 
+  ggplot() +
+  geom_point(aes(x = Jones_Percent.Predicted, y = Bruce_Percent.Predicted, color = BMI_cat, shape = gender)) +
+  geom_vline(xintercept = 80, linetype = "dashed", color = "black", size = 0.8, alpha = 0.5) +
+  geom_hline(yintercept = 80, linetype = "dashed", color = "black", size = 0.8, alpha = 0.5) +
+  labs(title = "Bruce to Jones", y = "% Predicted: Bruce ", 
+       x = "% Predicted: Jones", color = "BMI Category", shape = "Gender") +
+  theme_classic() +
+  scale_color_manual(values = natparks.pals("Triglav")) +
+  scale_fill_manual(values = natparks.pals("Triglav")) +
+  scale_x_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
+  scale_y_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
+  geom_text(label = "+ , -", x = 40, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "- , +", x = 140, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "+ , +", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "- , -", x = 40, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  theme(
+    legend.position = "none",
+    axis.title = element_text(size = 16),
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 14),
+    axis.text = element_text(size = 14)
+  )
+
+
+#Bruce to Neder
+
+table(Access_Interpertation_wide_Corrected$Bruce, Access_Interpertation_wide_Corrected$Neder)
+
+B_vs_N <- AccessCPET_Corrected %>%  
+  mutate(
+    gender = case_when(
+      gender == 1 ~ "Male",
+      gender == 2 ~ "Female",
+      TRUE ~ NA_character_
+    )
+  ) %>% 
+  ggplot() +
+  geom_point(aes(x = Neder_Percent.Predicted, y = Bruce_Percent.Predicted, color = BMI_cat, shape = gender)) +
+  geom_vline(xintercept = 80, linetype = "dashed", color = "black", size = 0.8, alpha = 0.5) +
+  geom_hline(yintercept = 80, linetype = "dashed", color = "black", size = 0.8, alpha = 0.5) +
+  labs(title = "Bruce to Neder", y = "% Predicted: Bruce ", 
+       x = "% Predicted: Neder", color = "BMI Category", shape = "Gender") +
+  theme_classic() +
+  scale_color_manual(values = natparks.pals("Triglav")) +
+  scale_fill_manual(values = natparks.pals("Triglav")) +
+  scale_x_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
+  scale_y_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
+  geom_text(label = "+ , -", x = 40, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "- , +", x = 140, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "+ , +", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "- , -", x = 40, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  theme(
+    legend.position = "none",
+    axis.title = element_text(size = 16),
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 14),
+    axis.text = element_text(size = 14)
+  )
+
+# ggsave("Agreement_BvsJ.png",
+#        path = "R:/AirHazardsCenter/AHBPCE-PDCEN_site data/Working Analyses/CPET Equations/Plots" )
+
+# organizing plots
+
+#(F_vs_W + F_vs_H) / (F_vs_B + F_vs_J) / (W_vs_H + W_vs_B) / (w_vs_J + H_vs_B) / (H_vs_J + B_vs_J) + legend.position = "collect" +  plot_annotation(title = "Classification of Exercise Tolerance:")
+
+
+
+(F_vs_W + F_vs_H) / (F_vs_B + F_vs_J) / (F_vs_N + plot_spacer()) + plot_layout(guides = "collect") +  plot_annotation(title = "A")
+
+(W_vs_H + W_vs_B) / ((w_vs_J) + W_vs_N) / (plot_spacer() + plot_spacer()) + plot_layout(guides = "collect") +  plot_annotation(title = "B")
+
+((H_vs_B) + (H_vs_J)) / (H_vs_N + plot_spacer()) / (plot_spacer() + plot_spacer()) + plot_layout(guides = "collect") +  plot_annotation(title = "C")
+
+((B_vs_J) + (B_vs_N)) / ((plot_spacer() + plot_spacer()) / (plot_spacer() + plot_spacer()) + plot_layout(guides = "collect") +  plot_annotation(title = "D"))
+
+
+#### Analysis Corrected Dataset----------------------------------------------------------------
+
+#assess normality
+
+
+shapiro.test(Access_Percent_predicted_tidy_Corrected$Predicted)
+
+shapiro.test(AccessCPET_Corrected$FRIEND_Percent.Predicted)
+shapiro.test(AccessCPET_Corrected$FRIEND_Predicted)
+
+shapiro.test(AccessCPET_Corrected$Wasserman_Percent.Predicted)
+shapiro.test(AccessCPET_Corrected$Wasserman_Predicted)
+
+shapiro.test(AccessCPET_Corrected$Hansen_Percent.Predicted)
+shapiro.test(AccessCPET_Corrected$Hansen_Predicted)
+
+shapiro.test(AccessCPET_Corrected$Jones_Percent.Predicted)
+shapiro.test(AccessCPET_Corrected$Jones_Predicted)
+
+shapiro.test(AccessCPET_Corrected$Bruce_Percent.Predicted)
+shapiro.test(AccessCPET_Corrected$Bruce_Predicted)
+
+shapiro.test(AccessCPET_Corrected$Neder_Percent.Predicted)
+shapiro.test(AccessCPET_Corrected$Neder_Predicted)
+
+shapiro.test(AccessCPET_Corrected$weight_kg)
+shapiro.test(AccessCPET_Corrected$height_cm)
+
+
+# mean values for paper
+
+AccessCPET_Corrected %>% 
+  select(c(
+    gender,
+    Mode,
+    VO2_peak.actual,
+    age,
+    bmi,
+    race
+  )) %>% 
+  CreateTableOne(data = ., test = FALSE, argsApprox = FALSE, argsNormal = FALSE, smd = FALSE, addOverall = TRUE) %>% 
+  summary(digits = 4)
+
+
+# 1 comparing raw predicted values
+
+#Making a dataset without the measured values
+Access_Corrected_Tidy_FORanalaysis <- Access_Percent_predicted_tidy_Corrected %>% 
+  filter(
+    Equation != "Measured"
+  )
+
+Access_Corrected_Tidy_FORanalaysis$Equation <- factor(Access_Corrected_Tidy_FORanalaysis$Equation)
+
+# non-parametric test for repeated measures (Friedman)
+
+friedman.test(Predicted ~ Equation | Subject_ID, data = Access_Corrected_Tidy_FORanalaysis)
+friedman_effsize(Predicted ~ Equation | Subject_ID, data = Access_Corrected_Tidy_FORanalaysis)
+
+
+
+
+conover <- frdAllPairsExactTest(y = Access_Corrected_Tidy_FORanalaysis$Predicted,
+                                groups = Access_Corrected_Tidy_FORanalaysis$Equation,
+                                blocks = Access_Corrected_Tidy_FORanalaysis$Subject_ID,
+                                p.adjust.methods = "bonferroni")
+conover
+
+
+
+# 
+
+
+
+#         FRIEND  Wasserman Hansen  Bruce  
+# Wasserman 0.27    -         -       -      
+#   Hansen    < 2e-16 < 2e-16   -       -      
+#   Bruce     3.7e-16 2.6e-12   < 2e-16 -      
+#   Jones     5.6e-07 9.4e-10   7.0e-06 < 2e-16
+
+
+# 2: compare clinical interpretation (within subject)
+# is there a difference between clinical interpretation
+# setting up wasserman to be the interpect/reference 
+
+
+# Access_Percent_predicted_tidy_Analysis$Equation <- factor(Access_Percent_predicted_tidy_Analysis$Equation,
+#                                                           levels =  c( "FRIEND", "Wasserman",    "Hansen",    "Bruce"  ,  "Jones"))                                                  
+# 
+# 
+# Access_glmm <- glmer(Clinical_Interpretation ~ Equation + (1|Subject_ID),
+#                      data = Access_Percent_predicted_tidy_Analysis,
+#                      family = binomial)
+# 
+# summary(Access_glmm) 
+# exp(fixef(Access_glmm))
+# 
+# tidy(Access_glmm, effects = "fixed", conf.int = TRUE, exponentiate = TRUE)
+
+
+
+
+# Calculating Cohen's Kappa for each pair
+
+
+# pairwise analysis 
+# need to use wide format for this
+
+
+
+Access_equations <- colnames(Access_Interpertation_wide_Corrected)[-1]  #  first column is Subject_ID
+
+for (i in 1:(length(Access_equations)-1)){
+  for (j in (i+1):length(Access_equations)){
+    
+    #creating the pair name ( F vs W)
+    pair_name <- paste(Access_equations[i], Access_equations[j], sep = "_")
+    
+    #creating a new variable for the pair
+    
+    Access_Interpertation_wide_Corrected <- Access_Interpertation_wide_Corrected %>% 
+      mutate(!!pair_name := factor(case_when(
+        .data[[Access_equations[i]]] == 0 & .data[[Access_equations[j]]] == 0 ~ 0, # both normal 
+        .data[[Access_equations[i]]] == 1 & .data[[Access_equations[j]]] == 1 ~ 0, # both abnormal 
+        .data[[Access_equations[i]]] == 1 & .data[[Access_equations[j]]] == 0 ~ -1, # reclassified as normal
+        .data[[Access_equations[i]]] == 0 & .data[[Access_equations[j]]] == 1 ~ 1, # reclassified as abnormal
+        TRUE ~ NA_real_))
+      )
+  }
+}
+
+Access_Percent_predicted_Corrected %>% 
+  select(-(Subject_ID))%>% 
+  CreateTableOne(data = ., test = FALSE, argsApprox = FALSE, argsNormal = FALSE, smd = FALSE, addOverall = TRUE) %>% 
+  summary(digits = 4)
+
+Access_Corrected_Tidy_FORanalaysis %>% 
+  group_by(Equation,Clinical_Interpretation ) %>% 
+  summarise(count = n())
+
+
+
+#Kappa analysis
+
+# Initialize an empty matrix to store kappa values
+kappa_matrix <- matrix(NA, nrow = length(Access_equations), ncol = length(Access_equations), dimnames = list(Access_equations, Access_equations))
+
+
+
+# Loop through each pair of equations and calculate Kappa
+
+
+for (i in 1:(length(Access_equations)-1)) {
+  for (j in (i+1):length(Access_equations)) {
+    
+    eq1 <- Access_Interpertation_wide_Corrected[[Access_equations[i]]]
+    eq2 <- Access_Interpertation_wide_Corrected[[Access_equations[j]]]
+    
+    Access_kappa_results <- kappa2(cbind(eq1, eq2))
+    cat("Kappa for", Access_equations[i], "vs", Access_equations[j], ":\n")
+    
+    print(Access_kappa_results)
+    cat("\n")
+    
+    kappa_matrix[i, j ] <- round(Access_kappa_results$value, digits = 2)
+    kappa_matrix[j, i ] <- round(Access_kappa_results$value, digits = 2)
+    
+    
+  }
+}
+
+
+
+
+#Plotting heat map
+
+ggplot(melt(kappa_matrix), aes(x = Var1, y = Var2, fill = value))+
+  geom_tile(color = "black",
+            lwd = 0.5,
+            linetype = 1) +
+  scale_fill_gradientn(colors = c("red", "white", "green"),
+                       values = scales::rescale(c(0, 0.5, 1)),
+                       limits = c(0, 1),
+                       name = "Kappa",
+                       breaks = c(0, 0.5, 1),
+                       labels = c("0", "0.5", "1")) +
+  geom_text(aes(label =value), color = "black") +
+  labs(
+    title = "Pairwise Cohen's Kappa Among Equations",
+    fill = "Kappa",
+    x = "",
+    y = "") +
+  theme_minimal() +
+  guides(fill = guide_colourbar(
+    barwidth = 0.5,                            
+    barheight = 20))
+
+
+
+#### Trying to understand what drives the differences:  ------------------------
+
+# goal here is to see what is different 
+# all possible pairwise comparisons
+
+Classifications_Corrected <- Access_Interpertation_wide_Corrected %>% 
+  select(Subject_ID, FRIEND, Wasserman, Hansen, Bruce, Jones, Neder) %>% 
+  mutate(
+    FvW = case_when(
+      FRIEND == "1" & Wasserman == "1" ~ 0,
+      FRIEND == "0" & Wasserman == "0" ~ 0,
+      FRIEND == "1" & Wasserman == "0" ~ -1,
+      FRIEND == "0" & Wasserman == "1" ~ 1,
+      TRUE ~ NA_real_
+    ),
+    
+    FvH = case_when(
+      FRIEND == "1" & Hansen == "1" ~ 0,
+      FRIEND == "0" & Hansen == "0" ~ 0,
+      FRIEND == "1" & Hansen == "0" ~ -1,
+      FRIEND == "0" & Hansen == "1" ~ 1,
+      TRUE ~ NA_real_
+    ),
+    
+    FvB = case_when(
+      FRIEND == "1" & Bruce == "1" ~ 0,
+      FRIEND == "0" & Bruce == "0" ~ 0,
+      FRIEND == "1" & Bruce == "0" ~ -1,
+      FRIEND == "0" & Bruce == "1" ~ 1,
+      TRUE ~ NA_real_
+    ),
+    
+    FvJ = case_when(
+      FRIEND == "1" & Jones == "1" ~ 0,
+      FRIEND == "0" & Jones == "0" ~ 0,
+      FRIEND == "1" & Jones == "0" ~ -1,
+      FRIEND == "0" & Jones == "1" ~ 1,
+      TRUE ~ NA_real_
+    ),
+    
+    FvN = case_when(
+      FRIEND == "1" & Neder == "1" ~ 0,
+      FRIEND == "0" & Neder == "0" ~ 0,
+      FRIEND == "1" & Neder == "0" ~ -1,
+      FRIEND == "0" & Neder == "1" ~ 1,
+      TRUE ~ NA_real_
+    ),
+    
+    WvH = case_when(
+      Wasserman == "1" & Hansen == "1" ~ 0,
+      Wasserman == "0" & Hansen == "0" ~ 0,
+      Wasserman == "1" & Hansen == "0" ~ -1,
+      Wasserman == "0" & Hansen == "1" ~ 1,
+      TRUE ~ NA_real_
+    ),
+    
+    WvB = case_when(
+      Wasserman == "1" & Bruce == "1" ~ 0,
+      Wasserman == "0" & Bruce == "0" ~ 0,
+      Wasserman == "1" & Bruce == "0" ~ -1,
+      Wasserman == "0" & Bruce == "1" ~ 1,
+      TRUE ~ NA_real_
+    ),
+    
+    WvJ = case_when(
+      Wasserman == "1" & Jones == "1" ~ 0,
+      Wasserman == "0" & Jones == "0" ~ 0,
+      Wasserman == "1" & Jones == "0" ~ -1,
+      Wasserman == "0" & Jones == "1" ~ 1,
+      TRUE ~ NA_real_
+    ),
+    
+    WvN = case_when(
+      Wasserman == "1" & Neder == "1" ~ 0,
+      Wasserman == "0" & Neder == "0" ~ 0,
+      Wasserman == "1" & Neder == "0" ~ -1,
+      Wasserman == "0" & Neder == "1" ~ 1,
+      TRUE ~ NA_real_
+    ),
+    
+    HvB = case_when(
+      Hansen == "1" & Bruce == "1" ~ 0,
+      Hansen == "0" & Bruce == "0" ~ 0,
+      Hansen == "1" & Bruce == "0" ~ -1,
+      Hansen == "0" & Bruce == "1" ~ 1,
+      TRUE ~ NA_real_
+    ),
+    
+    HvJ = case_when(
+      Hansen == "1" & Jones == "1" ~ 0,
+      Hansen == "0" & Jones == "0" ~ 0,
+      Hansen == "1" & Jones == "0" ~ -1,
+      Hansen == "0" & Jones == "1" ~ 1,
+      TRUE ~ NA_real_
+    ),
+    
+    HvN = case_when(
+      Hansen == "1" & Neder == "1" ~ 0,
+      Hansen == "0" & Neder == "0" ~ 0,
+      Hansen == "1" & Neder == "0" ~ -1,
+      Hansen == "0" & Neder == "1" ~ 1,
+      TRUE ~ NA_real_
+    ),
+    
+    BvJ = case_when(
+      Bruce == "1" & Jones == "1" ~ 0,
+      Bruce == "0" & Jones == "0" ~ 0,
+      Bruce == "1" & Jones == "0" ~ -1,
+      Bruce == "0" & Jones == "1" ~ 1,
+      TRUE ~ NA_real_
+    ),
+    
+    BvN = case_when(
+      Bruce == "1" & Neder == "1" ~ 0,
+      Bruce == "0" & Neder == "0" ~ 0,
+      Bruce == "1" & Neder == "0" ~ -1,
+      Bruce == "0" & Neder == "1" ~ 1,
+      TRUE ~ NA_real_
+    ),
+    
+    JvN = case_when(
+      Jones == "1" & Neder == "1" ~ 0,
+      Jones == "0" & Neder == "0" ~ 0,
+      Jones == "1" & Neder == "0" ~ -1,
+      Jones == "0" & Neder == "1" ~ 1,
+      TRUE ~ NA_real_
+    )
+  )
+
+
+columns_check <- c("FvW", "FvH", "FvB", "FvJ", "FvN", "WvH", "WvB", "WvJ", "WvN", "HvB", "HvJ", "HvN", "BvJ",
+                   "BvN", "JvN")
+
+Classifications_Corrected <- Classifications_Corrected %>% 
+  mutate(
+    count_NoChange = rowSums(Classifications_Corrected[,columns_check] == 0, na.rm = TRUE),
+    count_Reduced = rowSums(Classifications_Corrected[,columns_check] == 1, na.rm = TRUE),
+    count_Normal = rowSums(Classifications_Corrected[,columns_check] == -1, na.rm = TRUE)
+  )
+
+Classifications_Corrected %>%
+  count(count_NoChange == 15) 
+
+
+
+#comparing (age + sex + weight + height) between two  groups
+
+
+# 0) No change
+# 1) has some changes
+
+Classifications_Corrected <- Classifications_Corrected %>% 
+  mutate(
+    Status = factor(case_when(
+      count_NoChange == 15 ~ 0,
+      count_NoChange != 15 ~ 1
+    ))
+  )
+
+summary(Classifications_Corrected$Status)
+# 0   1 
+# 154 151
+
+table(Classifications_Corrected$WvB)
+
+Classifications_Corrected <- 
+  merge(
+    AccessCPET_Corrected[,c("Subject_ID", "gender",  "Mode" , "race" ,"age", "weight_kg", "height_cm", "bmi", "VO2_peak.actual", "FRIEND_Predicted", "Wasserman_Predicted",
+                  "Hansen_Predicted", "Bruce_Predicted", "Jones_Predicted", "Neder_Predicted")],
+    Classifications_Corrected,
+    by = "Subject_ID"
+  )
+
+AccessCPET_Corrected <- 
+  merge(
+    AccessCPET,
+    Classifications_Corrected[,c("Subject_ID", "Status")],
+    by = "Subject_ID"
+  )
+
+
+# mean values based on grouping  (no change vs change) for paper:
+Classifications_Corrected %>% 
+  CreateTableOne(data = ., test = FALSE, argsApprox = FALSE, argsNormal = FALSE, smd = FALSE, addOverall = TRUE, strata = "Status") %>% 
+  summary(digits = 4)
+
+
+#plots:
+(Classifications_Corrected %>% 
+    ggplot() +
+    geom_violin(aes(x = Status, y = age, color = Status))) +
+  (Classifications_Corrected %>%   
+     ggplot() +
+     geom_violin(aes(x = Status, y = weight_kg, color = Status))) +
+  (Classifications_Corrected %>% 
+     ggplot() +
+     geom_violin(aes(x = Status, y = height_cm, color = Status))) +
+  (Classifications_Corrected %>% 
+     ggplot() +
+     geom_violin(aes(x = Status, y = bmi, color = Status))) +
+  plot_layout(guides = "collect")
+
+
+Classifications_Corrected %>% 
+  ggplot() +
+  geom_bar(aes(x = gender, fill = Status), position = position_dodge())
+
+Classifications_Corrected %>% 
+  ggplot() +
+  geom_bar(aes(x = Mode, fill = Status), position = position_dodge())
+
+
+# Mannwhitneyfor height, weight, and age between two 
+# looping it in 
+
+Anaylsis_Variables <- c("age", "weight_kg", "height_cm")
+
+# Assuming your data frame my_data has 'group', 'age', 'height', and 'weight' 
+# Function to perform Kruskal-Wallis and then Dunn's test 
+perform_tests <- function(Anaylsis_Variables, data) { 
+  
+  # Perform Kruskal-Wallis Test
+  MW_test <- wilcox.test(as.formula(paste(Anaylsis_Variables, "~ Status")), data = Classifications_Corrected) 
+  MW_effectsize <- wilcox_effsize(as.formula(paste(Anaylsis_Variables, "~ Status")), data = Classifications_Corrected) 
+  
+  return(list(Wilcox = MW_test, wilcox_effect = MW_effectsize)) }
+
+
+# Check if significant to proceed with Dunn's test 
+
+# Apply the function to each variable and collect results
+results_wilcox <- lapply(Anaylsis_Variables, perform_tests, data = Classifications_Corrected) 
+# Name the list elements based on variables for easier identification 
+names(results_wilcox) <- Anaylsis_Variables
+
+results_wilcox
+
+
+chisq.test(Classifications_Corrected$gender, Classifications_Corrected$Status)
+chisq.test(Classifications_Corrected$race, Classifications_Corrected$Status)
+chisq.test(Classifications_Corrected$Mode, Classifications_Corrected$Status)
+
+#specif numbers for paper.
+# Looking at effect of sex with WvsB
+
+Classifications_Corrected %>% 
+  group_by(gender, WvB) %>% 
+  summarise(Count = n())
+
+Access_Corrected_Tidy_FORanalaysis %>% 
+  filter(
+    Equation == "Wasserman" | Equation == "Bruce"
+  ) %>% 
+  group_by(gender, Equation) %>% 
+  summarise(mean1 = mean(Percent.Predicted))
+
+
+  merge(
+    Access_Percent_predicted_Corrected,
+    AccessCPET_Corrected[,c("Subject_ID", "gender")],
+    by = "Subject_ID"
+  ) %>% 
+  group_by(gender) %>% 
+  summarise(meanW = mean(Wasserman_Predicted), meanB = mean(Bruce_Predicted, na.rm = TRUE))
+
+
+
+# Spiderweb plot ----------------------------------------------------------
+
+#need to make groups
+
+
+quantile(Access_Corrected_Tidy_FORanalaysis$bmi)
+#       0%      25%      50%      75%     100% 
+# 16.72362 28.17020 31.00780 34.90000 46.85737 
+
+quantile(Access_Corrected_Tidy_FORanalaysis$age)
+# 0%  25%  50%  75% 100% 
+# 24   36   44   51   67 
+
+
+Access_Corrected_Tidy_FORanalaysis <- Access_Corrected_Tidy_FORanalaysis %>% 
+  mutate(
+    Spider_Grouping = factor(case_when(
+      bmi <= 28 &  age <= 36 ~ "BMI 1 | Age 1",
+      bmi <= 28 &  age > 36 & age <= 51 ~ "BMI 1 | Age 2",
+      bmi <= 28 &  age > 51 ~ "BMI 1 | Age 3",
+      
+      bmi > 28 & bmi <= 35 &  age <= 36 ~ "BMI 2 | Age 1",
+      bmi > 28 & bmi <= 35 & age > 36 & age <= 51 ~ "BMI 2 | Age 2",
+      bmi > 28 & bmi <= 35 & age > 51 ~ "BMI 2 | Age 3",
+      
+      bmi > 35 & age <= 36 ~ "BMI 3 | Age 1",
+      bmi > 35 & age > 36 & age <= 51 ~ "BMI 3 | Age 2",
+      bmi > 35 & age > 51 ~ "BMI 3 | Age 3",
+      
+      TRUE ~ NA_character_)))
+
+SpiderPlot <- Access_Corrected_Tidy_FORanalaysis %>% 
+  group_by(gender, Equation, Spider_Grouping) %>% 
+  summarise(Mean_Predicted = mean(Percent.Predicted), .groups = "drop")
+
+SpiderPlot 
+
+Spider_groups <- unique(SpiderPlot$Spider_Grouping)
+
+SpiderPlot_male <- SpiderPlot %>% 
+    filter(gender == 1) %>% 
+  ggplot() +
+  geom_polygon(aes(x = Spider_Grouping, y = Mean_Predicted, color = Equation, group = Equation, fill = Equation), linewidth = 1, alpha = 0.1) +
+  coord_radar(clip = "off") +
+  theme_radar() +
+  
+  
+  scale_x_discrete(guide = guide_axis(n.dodge = 2)) +
+  scale_y_continuous(breaks = seq(50, 120, by = 10), limits = c(50, 120), expand = c(0,0)) +
+  
+  
+  geom_text(data = data.frame(x = rep("BMI 1 | Age 1", 6), y = seq(60, 110, by = 10)), aes(x = x, y = y, label = y), 
+            position = position_nudge(x = 0.5), angle = 0, vjust = 0.5, hjust = 0.5) +
+  
+  labs(title = "Percent Predicted Per Equation for Males") +
+  theme(
+    plot.margin = unit(c(0,30,0,0), "pt"),
+    axis.text.x = element_text(size = 12),
+    axis.ticks = element_line(color = 2,
+                              linewidth = 2),
+    axis.title.x = element_blank(),
+    axis.title.y = element_blank(),
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    legend.title = element_blank(),
+    legend.position = "bottom"  
+  ) +
+  scale_fill_jco() +
+  scale_color_jco()
+
+
+SpiderPlot_male
+  
+SpiderPlot_female <- SpiderPlot %>% 
+     filter(gender == 2) %>% 
+     ggplot() +
+     geom_polygon(aes(x = Spider_Grouping, y = Mean_Predicted, color = Equation, group = Equation, fill = Equation), linewidth = 1, alpha = 0.1) +
+     coord_radar(clip = "off") +
+     theme_radar() +
+     
+     scale_x_discrete(guide = guide_axis(n.dodge = 2)) +
+     scale_y_continuous(breaks = seq(50, 120, by = 10), limits = c(50, 120), expand = c(0,0)) +
+     
+     
+     geom_text(data = data.frame(x = rep("BMI 1 | Age 1", 6), y = seq(60, 110, by = 10)), aes(x = x, y = y, label = y), 
+               position = position_nudge(x = 0.5), angle = 0, vjust = 0.5, hjust = 0.5) +
+     
+  labs(title = "Percent Predicted Per Equation for Females") +
+  theme(
+       axis.text.x = element_text(size = 12),
+       axis.ticks = element_line(color = 2,
+                                 linewidth = 2),
+       # panel.background = element_rect(fill = "white", color = "white"),
+       # panel.grid = element_blank(),
+       # panel.grid.major.x = element_blank(),
+       axis.title.x = element_blank(),
+       axis.title.y = element_blank(),
+       axis.text.y = element_blank(),
+       axis.ticks.y = element_blank(),
+       legend.title = element_blank()
+       # Use gray text for the region names
+       # Move the legend to the bottom
+
+     ) +
+  scale_fill_jco() +
+  scale_color_jco()
+   
+SpiderPlot_female
+   
+   
+SpiderPlot_male + SpiderPlot_female + plot_layout(guides = "collect") & theme(legend.position = "bottom")
+
+
+
+
+
+# ALL PLOTS FOR PAPER 1.0 -----------------------------------------------------
+
+# Figure 3 of paper: Violin plot 
+Access_Percent_predicted_tidy_Corrected %>% 
+  filter(Equation != "Measured") %>% 
+  ggplot(aes(x = Equation, y = Percent.Predicted)) +
+  geom_violindot(aes(fill = Equation), binwidth = 5, dots_size = 0.1, color_dots ="black", fill_dots = "black") +
+  theme_classic() +
+  scale_fill_jco() +
+  labs(y = "Percent Predicted", x = "") +
+  theme(
+    legend.position = "none",
+    axis.title = element_text(size = 16),
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 14),
+    axis.text = element_text(size = 14)
+  )
+
+
+# Figure 2, Spider Plot:
+SpiderPlot_male + SpiderPlot_female + plot_layout(guides = "collect") & theme(legend.position = "bottom")
+
+
+# Figure 1 of paper: Violin plot of % Predicted VȮ2 across equations.
+Access_Percent_predicted_tidy_Corrected %>% 
+  filter(Equation != "Measured") %>%
+  ggplot(aes(x = Equation, y = Predicted)) +
+  geom_violindot(aes(fill = Equation), binwidth = 100, dots_size = 0.1, color_dots ="black", fill_dots = "black") +
+  # stat_summary(fun = mean, geom = "point", size = 3) +
+  # stat_summary(fun.data = mean_sdl, fun.args = list(mult = 1), geom = "errorbar", width = 0.2) +
+  theme_classic() +
+  scale_fill_jco() +
+  labs(y = expression(Peak~VO[2]~(ml%*%min^-1)), x = "") +
+  theme(
+    legend.position = "none",
+    axis.title = element_text(size = 16),
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 14),
+    axis.text = element_text(size = 14)
+  )
+
+# Figure 4 of paper: agreement plots for each pair using the corrected dataset 
+
+(F_vs_W + F_vs_H) / (F_vs_B + F_vs_J) / (F_vs_N + plot_spacer()) + plot_layout(guides = "collect") +  plot_annotation(title = "A")
+
+(W_vs_H + W_vs_B) / ((w_vs_J) + W_vs_N) / (plot_spacer() + plot_spacer()) + plot_layout(guides = "collect") +  plot_annotation(title = "B")
+
+((H_vs_B) + (H_vs_J)) / (H_vs_N + plot_spacer()) / (plot_spacer() + plot_spacer()) + plot_layout(guides = "collect") +  plot_annotation(title = "C")
+
+((B_vs_J) + (B_vs_N)) / ((plot_spacer() + plot_spacer()) / (plot_spacer() + plot_spacer()) + plot_layout(guides = "collect") +  plot_annotation(title = "D"))
+
+
+
+
+
+#-------------------------------------------------------------------------------
+
+# AUC Dataset -------------------------------------------------------------
+
+
+#bringing in all SOB questions
+Clincal_Demos <- read_csv("Clincal_Demos_2024-03-01.csv")
+PDCEN_REDCAP <- read_csv("PDCEN_REDCAP.csv")
+
+Clincal_Demos <- Clincal_Demos %>% 
+  select(
+    Subject_ID = WRIISCID,
+    phq_sob
+  )
+
+Clincal_Demos <- Clincal_Demos %>% filter(!(duplicated(Subject_ID))) 
+
+PDCEN_REDCAP <- PDCEN_REDCAP %>% 
+  select(
+    Subject_ID,
+    phq_sob 
+  )
+
+PDCEN_REDCAP <- PDCEN_REDCAP %>% filter(!(duplicated(PDCEN_REDCAP))) 
+
+
+AWARE_REDCAP <- 
+  redcap_read_oneshot(
+    redcap_uri = "https://varedcap.rcp.vaec.va.gov/redcap/api/",
+    token = "7F2EF38183ED3B2F7ADA01A4A70248B3",
+    raw_or_label_headers = "raw",
+    fields = 'wriisc_id',
+    forms = 'section_13_phq15'
+  )
+
+AWARE_REDCAP <- as_tibble(AWARE_REDCAP$data)
+
+AWARE_REDCAP <- AWARE_REDCAP %>% 
+  select(
+    Subject_ID = wriisc_id,
+    phq_sob = phq_j
+  )
+
+AWARE_REDCAP <- AWARE_REDCAP %>% 
+  filter(!(duplicated(Subject_ID))) 
+
+
+Clincal_Demos <-
+  rows_patch(
+    Clincal_Demos,
+    PDCEN_REDCAP,
+    by = "Subject_ID",
+    unmatched = "ignore"
+  )
+
+
+Clincal_Demos <-
+  rows_patch(
+    Clincal_Demos,
+    AWARE_REDCAP,
+    by = "Subject_ID",
+    unmatched = "ignore"
+  )
+
+
+
+Clincal_Demos <- Clincal_Demos %>% 
+  filter(
+    Subject_ID %in% AccessCPET$Subject_ID
+  )
+
+AccessCPET <- 
+  merge(
+    AccessCPET,
+    Clincal_Demos,
+    by = "Subject_ID",
+    all.x = TRUE
+  )
+
+AccessCPET <- AccessCPET %>% 
+  replace_with_na_all(~.x %in% c(-999, "NA", "missing", 999)) 
+
+AccessCPET$phq_sob <- factor(AccessCPET$phq_sob)
+# 0 = not bothered
+# 1 = Bothered a little
+# 2 = Bothered a lot
+
+
+AccessCPET %>% 
+  select(phq_sob) %>% 
+  CreateTableOne(data = ., test = FALSE, argsApprox = FALSE, argsNormal = FALSE, smd = FALSE, addOverall = TRUE) %>% 
+  summary(digits = 4)
+
+
+
+# New Equation ------------------------------------------------------------
+
+#   
+# 
+# #making new dataset to make this easier to deal with
+# 
+# New_Equation <- AccessCPET %>% 
+#   select(
+#     Subject_ID,
+#     Mode,
+#     age,
+#     gender,
+#     weight_kg,
+#     height_cm,
+#     bmi,
+#     VO2_peak.actual
+#   )
+# 
+# 
+# New_Equation_Bike <- New_Equation %>% 
+#   filter(
+#     Mode == "Bike")
+# 
+# New_Equation_Tread <- New_Equation %>% 
+#   filter(
+#     Mode == "Treadmill")
+# 
+# 
+# 
+# # `Making Equation: Multivariate: weight/height
+# 
+# # all
+# Multivariate_weight_height <- 
+#   lm(data = New_Equation, VO2_peak.actual ~ age + gender + Mode + height_cm + weight_kg)
+# 
+# summary(Multivariate_weight_height)
+# parameters(Multivariate_weight_height)
+# check_model(Multivariate_weight_height)
+# model_performance(Multivariate_weight_height)
+# 
+# 
+# 
+# plot(parameters(Multivariate_weight_height))
+# estimate_prediction(Multivariate_weight_height)
+# 
+# 
+# # Just Bike
+# Multivariate_weight_height.Bike <- 
+#   lm(data = New_Equation_Bike, VO2_peak.actual ~ age + gender + height_cm + weight_kg)
+# 
+# summary(Multivariate_weight_height.Bike)
+# parameters(Multivariate_weight_height.Bike)
+# check_model(Multivariate_weight_height.Bike)
+# model_performance(Multivariate_weight_height.Bike)
+# 
+# 
+# 
+# plot(parameters(Multivariate_weight_height.Bike))
+# estimate_prediction(Multivariate_weight_height.Bike)
+# 
+# 
+# # Just Tread
+# Multivariate_weight_height.Tread <- 
+#   lm(data = New_Equation_Tread, VO2_peak.actual ~ age + gender + height_cm + weight_kg)
+# 
+# summary(Multivariate_weight_height.Tread)
+# parameters(Multivariate_weight_height.Tread)
+# check_model(Multivariate_weight_height.Tread)
+# model_performance(Multivariate_weight_height.Tread)
+# 
+# 
+# 
+# 
+# # Case Example ------------------------------------------------------------
+# 
+# # selecting veterans to do a case review
+# 
+# #FRIEND to wasserman
+# 
+# # vets who went from normal to abnormal 
+# # only selecting PDCEN folks
+# 
+# 
+# # Pulling in all Redcap Data ---------------------------------------------------
+# 
+# PDCEN_REDCAP <- 
+#   redcap_read_oneshot(
+#     redcap_uri = "https://varedcap.rcp.vaec.va.gov/redcap/api/",
+#     token = "32D4DD3A904549F2A755EDFFB19A53A9",
+#     raw_or_label_headers = "raw",
+#     events = "initial_contact_arm_1"
+#   )
+# 
+# PDCEN_REDCAP <-  PDCEN_REDCAP$data
+# PDCEN_REDCAP <- as_tibble(PDCEN_REDCAP)
+# PDCEN_REDCAP <- clean_names(PDCEN_REDCAP)
+# 
+# 
+# #write.csv(colnames(PDCEN_REDCAP), "Variables.csv")
+# 
+# 
+# #coding back in race
+# PDCEN_REDCAP <- PDCEN_REDCAP %>% 
+#   mutate(
+#     race = case_when(
+#       demo_race_0 == 1 ~ "Native American",
+#       demo_race_1 == 1 ~ "Asian",
+#       demo_race_2 == 1 ~ "Black",
+#       demo_race_3 == 1 ~ "Pacific Islander",
+#       demo_race_4 == 1 ~ "White",
+#       demo_race_5 == 1 ~ "Unknown",
+#       demo_race_6 == 1 ~ "Other",
+#       demo_race_0 == 0 & demo_race_1 == 0 & demo_race_2 == 0 & demo_race_3 == 0 & demo_race_4 == 0 & demo_race_5 == 0 & demo_race_6 == 0 ~ "Other",
+#       TRUE ~ "NA"
+#     )
+#   )
+# 
+# 
+# PDCEN_REDCAP <- PDCEN_REDCAP %>%  
+#   mutate(pdcen_site = case_when(
+#     pdcen_site == 1 ~ "Ann Arbor",
+#     pdcen_site == 2 ~ "Baltimore",
+#     pdcen_site == 3 ~ "Colorado",
+#     pdcen_site == 4 ~ "Nashville",
+#     pdcen_site == 5 ~ "New Jersey",
+#     pdcen_site == 6 ~ "San Francisco",
+#     pdcen_site == 7 ~ "Other",
+#     TRUE ~ "None"
+#   ))
+# 
+# 
+# 
+# PDCEN_REDCAP$pdcen_site <- factor(PDCEN_REDCAP$pdcen_site,
+#                                   levels = c("Ann Arbor", "Baltimore", "Colorado", "Nashville", "New Jersey", "San Francisco", "Other", "None"))
+# 
+# 
+# PDCEN_REDCAP <- PDCEN_REDCAP %>%  replace_with_na_all(~.x %in% c(-999, "NA", "missing")) 
+# 
+# 
+# #  DEMO  -------------------------------------------------------
+# 
+# REDCAP_DEMO <- PDCEN_REDCAP %>%  
+#   mutate(
+#     Redcap_1 = "DEMO"
+#   ) %>%  
+#   select(
+#     Redcap_1,
+#     wriisc_id,
+#     pdcen_site,
+#     last_name,
+#     first_name,
+#     race,
+#     pdcen_site,
+#     ethnic_gli,
+#     demo_age,
+#     demo_gender,
+#     mmrc_dyspnea
+#   ) %>%  
+#   rename(
+#     Subject_ID = wriisc_id,
+#     age = demo_age,
+#     gender = demo_gender
+#   )  %>% 
+#   mutate(
+#     mmrc_dyspnea = case_when(
+#       mmrc_dyspnea == 1 ~ 0,
+#       mmrc_dyspnea == 2 ~ 1,
+#       mmrc_dyspnea == 3 ~ 2,
+#       mmrc_dyspnea == 4 ~ 3,
+#       mmrc_dyspnea == 5 ~ 4,
+#       TRUE ~ NA_real_
+#     ),
+#     Redcap_5 = "Respiratory"
+#   ) %>% 
+#   select(
+#     Redcap_5, everything()
+#   ) %>% 
+#   filter(!is.na(Subject_ID)) 
+# 
+# 
+# 
+# #getting and ID list
+# PDCEN_IDS <-
+#   REDCAP_DEMO$Subject_ID
+# 
+# PDCEN_IDS <- PDCEN_IDS[!(PDCEN_IDS %in% c("**TEST**", "***test2.0***"))]
+# 
+# 
+# FriendvsWasserman_Normal <-  Classifications %>% 
+#   filter(Subject_ID %in% PDCEN_IDS & FvW == 1)
+# 
+# FriendvsWasserman_Reduced <-  Classifications %>% 
+#   filter(Subject_ID %in% PDCEN_IDS & FvW == -1)
+# 
+# #
+# # IDs that need chart review:
+# 
+#   #Reduced to normal: 37751 38053 38280 38344
+#   #Reduced to abnormal: 37331 37389 37462 37529 37584 37607 37657 37676 37842 37918 38168 38229 38244
+# 
+# 
+# 
+
+
+
+
+
+
