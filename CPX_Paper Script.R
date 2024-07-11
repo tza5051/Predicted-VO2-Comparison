@@ -2,7 +2,7 @@
 # using only the Access section. 
 
 
-
+#github change 
 
 # Packages  ---------------------------------------------------------------
 
@@ -40,7 +40,7 @@ library(DataExplorer)
 library(httr)
 library(jsonlite)
 library(gghighlight)
-
+library(gtsummary)
 library(knitr)
 library(haven)
 #library(plotly)
@@ -666,7 +666,7 @@ Tread_Dataset %>%
   scale_fill_jco() +
   labs(y = expression(Peak~VO[2]~(ml%*%min^-1)), x = "") +
   theme(
-    legend.position = "none",
+   
     axis.title = element_text(size = 16),
     legend.text = element_text(size = 14),
     legend.title = element_text(size = 14),
@@ -726,7 +726,7 @@ AccessCPET_Uncorrected %>%
   geom_text(label = "+ , +", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
   geom_text(label = "- , -", x = 40, y = 20, color = "black", size = 4.5, alpha = 0.02) +
   theme(
-    legend.position = "none",
+   
     axis.title = element_text(size = 16),
     legend.text = element_text(size = 14),
     legend.title = element_text(size = 14),
@@ -776,10 +776,12 @@ for (i in 1:(length(Access_equations_Tread)-1)){
 # 1 = # reclassified as adnormal
 Tread_Interpretation_wide %>% 
   select(-(Subject_ID))%>% 
-  CreateTableOne(data = ., test = FALSE, argsApprox = FALSE, argsNormal = FALSE, smd = FALSE, addOverall = TRUE) %>% 
-  summary(digits = 4)
-
-
+  tbl_summary(    
+    statistic = list(
+      all_continuous() ~ "{mean} ({sd})",
+      all_categorical() ~ "{n} / {N} ({p}%)"),
+    digits = all_continuous() ~ 2,) %>% 
+  add_n()
 
 #Kappa analysis for tread: Agreement between the two
 
@@ -900,8 +902,12 @@ chisq.test(Classifications_Tread$race, Classifications_Tread$Status)
 
 Classifications_Tread %>% 
   select(-(Subject_ID))%>% 
-  CreateTableOne(data = ., test = FALSE, argsApprox = FALSE, argsNormal = FALSE, smd = FALSE, addOverall = TRUE, strata = "Status") %>% 
-  summary(digits = 4)
+  tbl_summary(    
+    statistic = list(
+      all_continuous() ~ "{mean} ({sd})",
+      all_categorical() ~ "{n} / {N} ({p}%)"),
+    digits = all_continuous() ~ 2,) %>% 
+  add_n()
 
 #### Bike-------------------------------------------------------------------------
 
@@ -940,7 +946,7 @@ Bike_Dataset %>%
   scale_fill_jco() +
   labs(y = expression(Peak~VO[2]~(ml%*%min^-1)), x = "") +
   theme(
-    legend.position = "none",
+   
     axis.title = element_text(size = 16),
     legend.text = element_text(size = 14),
     legend.title = element_text(size = 14),
@@ -996,14 +1002,14 @@ AccessCPET_Uncorrected %>%
   geom_text(label = "+ , +", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
   geom_text(label = "- , -", x = 40, y = 20, color = "black", size = 4.5, alpha = 0.02) +
   theme(
-    legend.position = "none",
+   
     axis.title = element_text(size = 16),
     legend.text = element_text(size = 14),
     legend.title = element_text(size = 14),
     axis.text = element_text(size = 14)
   )
 
-
+------------------------
 # FvH:
 
 AccessCPET_Uncorrected %>%  
@@ -1012,8 +1018,7 @@ AccessCPET_Uncorrected %>%
       gender == 1 ~ "Male",
       gender == 2 ~ "Female",
       TRUE ~ NA_character_
-    )
-  ) %>%
+    )) %>%
   filter(Mode == "Bike") %>% 
   ggplot() +
   geom_point(aes(y = FRIEND_Percent.Predicted, x = Hansen_Percent.Predicted, color = BMI_cat, shape = gender)) +
@@ -1031,7 +1036,7 @@ AccessCPET_Uncorrected %>%
   geom_text(label = "+ , +", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
   geom_text(label = "- , -", x = 40, y = 20, color = "black", size = 4.5, alpha = 0.02) +
   theme(
-    legend.position = "none",
+   
     axis.title = element_text(size = 16),
     legend.text = element_text(size = 14),
     legend.title = element_text(size = 14),
@@ -1068,7 +1073,7 @@ AccessCPET_Uncorrected %>%
   geom_text(label = "+ , +", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
   geom_text(label = "- , -", x = 40, y = 20, color = "black", size = 4.5, alpha = 0.02) +
   theme(
-    legend.position = "none",
+   
     axis.title = element_text(size = 16),
     legend.text = element_text(size = 14),
     legend.title = element_text(size = 14),
@@ -1105,7 +1110,7 @@ AccessCPET_Uncorrected %>%
   geom_text(label = "+ , +", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
   geom_text(label = "- , -", x = 40, y = 20, color = "black", size = 4.5, alpha = 0.02) +
   theme(
-    legend.position = "none",
+   
     axis.title = element_text(size = 16),
     legend.text = element_text(size = 14),
     legend.title = element_text(size = 14),
@@ -1139,7 +1144,7 @@ AccessCPET_Uncorrected %>%
   geom_text(label = "+ , +", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
   geom_text(label = "- , -", x = 40, y = 20, color = "black", size = 4.5, alpha = 0.02) +
   theme(
-    legend.position = "none",
+   
     axis.title = element_text(size = 16),
     legend.text = element_text(size = 14),
     legend.title = element_text(size = 14),
@@ -1173,7 +1178,7 @@ AccessCPET_Uncorrected %>%
   geom_text(label = "+ , +", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
   geom_text(label = "- , -", x = 40, y = 20, color = "black", size = 4.5, alpha = 0.02) +
   theme(
-    legend.position = "none",
+   
     axis.title = element_text(size = 16),
     legend.text = element_text(size = 14),
     legend.title = element_text(size = 14),
@@ -1207,7 +1212,7 @@ AccessCPET_Uncorrected %>%
   geom_text(label = "+ , +", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
   geom_text(label = "- , -", x = 40, y = 20, color = "black", size = 4.5, alpha = 0.02) +
   theme(
-    legend.position = "none",
+   
     axis.title = element_text(size = 16),
     legend.text = element_text(size = 14),
     legend.title = element_text(size = 14),
@@ -1242,7 +1247,7 @@ AccessCPET_Uncorrected %>%
   geom_text(label = "+ , +", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
   geom_text(label = "- , -", x = 40, y = 20, color = "black", size = 4.5, alpha = 0.02) +
   theme(
-    legend.position = "none",
+   
     axis.title = element_text(size = 16),
     legend.text = element_text(size = 14),
     legend.title = element_text(size = 14),
@@ -1276,7 +1281,7 @@ AccessCPET_Uncorrected %>%
   geom_text(label = "+ , +", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
   geom_text(label = "- , -", x = 40, y = 20, color = "black", size = 4.5, alpha = 0.02) +
   theme(
-    legend.position = "none",
+   
     axis.title = element_text(size = 16),
     legend.text = element_text(size = 14),
     legend.title = element_text(size = 14),
@@ -1310,7 +1315,7 @@ AccessCPET_Uncorrected %>%
   geom_text(label = "+ , +", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
   geom_text(label = "- , -", x = 40, y = 20, color = "black", size = 4.5, alpha = 0.02) +
   theme(
-    legend.position = "none",
+   
     axis.title = element_text(size = 16),
     legend.text = element_text(size = 14),
     legend.title = element_text(size = 14),
@@ -1359,8 +1364,12 @@ for (i in 1:(length(Access_equations_Bike)-1)){
 
 Bike_Interpretation_wide %>% 
   select(-(Subject_ID))%>% 
-  CreateTableOne(data = ., test = FALSE, argsApprox = FALSE, argsNormal = FALSE, smd = FALSE, addOverall = TRUE) %>% 
-  summary(digits = 4)
+  tbl_summary(    
+    statistic = list(
+      all_continuous() ~ "{mean} ({sd})",
+      all_categorical() ~ "{n} / {N} ({p}%)"),
+    digits = all_continuous() ~ 2,) %>% 
+  add_n()
 
 
 
@@ -1572,8 +1581,12 @@ chisq.test(Classifications_Bike$race, Classifications_Bike$Status)
 # Mean values
 Classifications_Bike %>% 
   select(-(Subject_ID))%>% 
-  CreateTableOne(data = ., test = FALSE, argsApprox = FALSE, argsNormal = FALSE, smd = FALSE, addOverall = TRUE, strata = "Status") %>% 
-  summary(digits = 4)
+  tbl_summary(    
+    statistic = list(
+      all_continuous() ~ "{mean} ({sd})",
+      all_categorical() ~ "{n} / {N} ({p}%)"),
+    digits = all_continuous() ~ 2,) %>% 
+  add_n()
 
 
 
@@ -1618,7 +1631,7 @@ Access_Percent_predicted_tidy_Corrected %>%
   scale_fill_jco() +
   labs(y = expression(Peak~VO[2]~(ml%*%min^-1)), x = "") +
   theme(
-    legend.position = "none",
+   
     axis.title = element_text(size = 16),
     legend.text = element_text(size = 14),
     legend.title = element_text(size = 14),
@@ -1678,17 +1691,18 @@ F_vs_W <- AccessCPET_Corrected %>%
   scale_fill_manual(values = natparks.pals("Triglav")) +
   scale_x_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
   scale_y_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
-  geom_text(label = "+ | -", x = 40, y = 140, color = "black", size = 4.5, alpha = 0.02) +
-  geom_text(label = "- , +", x = 140, y = 20, color = "black", size = 4.5, alpha = 0.02) +
-  geom_text(label = "+ , +", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
-  geom_text(label = "- , -", x = 40, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "0 -> 1", x = 40, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "1 -> 0", x = 140, y = 25, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "0 -> 0", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "1 -> 1", x = 40, y = 25, color = "black", size = 4.5, alpha = 0.02) +
   theme(
-    legend.position = "none",
+   
     axis.title = element_text(size = 16),
     legend.text = element_text(size = 14),
     legend.title = element_text(size = 14),
     axis.text = element_text(size = 14)
   )
+F_vs_W
 # ggsave("Agreement_FvsW.png",
 #        path = "R:/AirHazardsCenter/AHBPCE-PDCEN_site data/Working Analyses/CPET Equations/Plots" )
 
@@ -1717,12 +1731,12 @@ F_vs_H <- AccessCPET_Corrected %>%
   scale_fill_manual(values = natparks.pals("Triglav")) +
   scale_x_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
   scale_y_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
-  geom_text(label = "+ , -", x = 40, y = 140, color = "black", size = 4.5, alpha = 0.02) +
-  geom_text(label = "- , +", x = 140, y = 20, color = "black", size = 4.5, alpha = 0.02) +
-  geom_text(label = "+ , +", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
-  geom_text(label = "- , -", x = 40, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "0 -> 1", x = 40, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "1 -> 0", x = 140, y = 25, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "0 -> 0", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "1 -> 1", x = 40, y = 25, color = "black", size = 4.5, alpha = 0.02) +
   theme(
-    legend.position = "none",
+   
     axis.title = element_text(size = 16),
     legend.text = element_text(size = 14),
     legend.title = element_text(size = 14),
@@ -1756,12 +1770,12 @@ F_vs_B <- AccessCPET_Corrected %>%
   scale_fill_manual(values = natparks.pals("Triglav")) +
   scale_x_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
   scale_y_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
-  geom_text(label = "+ , -", x = 40, y = 140, color = "black", size = 4.5, alpha = 0.02) +
-  geom_text(label = "- , +", x = 140, y = 20, color = "black", size = 4.5, alpha = 0.02) +
-  geom_text(label = "+ , +", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
-  geom_text(label = "- , -", x = 40, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "0 -> 1", x = 40, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "1 -> 0", x = 140, y = 25, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "0 -> 0", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "1 -> 1", x = 40, y = 25, color = "black", size = 4.5, alpha = 0.02) +
   theme(
-    legend.position = "none",
+   
     axis.title = element_text(size = 16),
     legend.text = element_text(size = 14),
     legend.title = element_text(size = 14),
@@ -1796,12 +1810,12 @@ F_vs_J <- AccessCPET_Corrected %>%
   scale_fill_manual(values = natparks.pals("Triglav")) +
   scale_x_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
   scale_y_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
-  geom_text(label = "+ , -", x = 40, y = 140, color = "black", size = 4.5, alpha = 0.02) +
-  geom_text(label = "- , +", x = 140, y = 20, color = "black", size = 4.5, alpha = 0.02) +
-  geom_text(label = "+ , +", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
-  geom_text(label = "- , -", x = 40, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "0 -> 1", x = 40, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "1 -> 0", x = 140, y = 25, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "0 -> 0", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "1 -> 1", x = 40, y = 25, color = "black", size = 4.5, alpha = 0.02) +
   theme(
-    legend.position = "none",
+   
     axis.title = element_text(size = 16),
     legend.text = element_text(size = 14),
     legend.title = element_text(size = 14),
@@ -1835,12 +1849,12 @@ F_vs_N <- AccessCPET_Corrected %>%
   scale_fill_manual(values = natparks.pals("Triglav")) +
   scale_x_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
   scale_y_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
-  geom_text(label = "+ , -", x = 40, y = 140, color = "black", size = 4.5, alpha = 0.02) +
-  geom_text(label = "- , +", x = 140, y = 20, color = "black", size = 4.5, alpha = 0.02) +
-  geom_text(label = "+ , +", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
-  geom_text(label = "- , -", x = 40, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "0 -> 1", x = 40, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "1 -> 0", x = 140, y = 25, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "0 -> 0", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "1 -> 1", x = 40, y = 25, color = "black", size = 4.5, alpha = 0.02) +
   theme(
-    legend.position = "none",
+   
     axis.title = element_text(size = 16),
     legend.text = element_text(size = 14),
     legend.title = element_text(size = 14),
@@ -1871,11 +1885,12 @@ W_vs_H <- AccessCPET_Corrected %>%
   scale_fill_manual(values = natparks.pals("Triglav")) +
   scale_x_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
   scale_y_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
-  geom_text(label = "+ , -", x = 40, y = 140, color = "black", size = 4.5, alpha = 0.02) +
-  geom_text(label = "- , +", x = 140, y = 20, color = "black", size = 4.5, alpha = 0.02) +
-  geom_text(label = "+ , +", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
-  geom_text(label = "- , -", x = 40, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "0 -> 1", x = 40, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "1 -> 0", x = 140, y = 25, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "0 -> 0", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "1 -> 1", x = 40, y = 25, color = "black", size = 4.5, alpha = 0.02) +
   theme(
+   
     axis.title = element_text(size = 16),
     legend.text = element_text(size = 14),
     legend.title = element_text(size = 14),
@@ -1909,11 +1924,12 @@ W_vs_B <- AccessCPET_Corrected %>%
   scale_fill_manual(values = natparks.pals("Triglav")) +
   scale_x_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
   scale_y_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
-  geom_text(label = "+ , -", x = 40, y = 140, color = "black", size = 4.5, alpha = 0.02) +
-  geom_text(label = "- , +", x = 140, y = 20, color = "black", size = 4.5, alpha = 0.02) +
-  geom_text(label = "+ , +", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
-  geom_text(label = "- , -", x = 40, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "0 -> 1", x = 40, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "1 -> 0", x = 140, y = 25, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "0 -> 0", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "1 -> 1", x = 40, y = 25, color = "black", size = 4.5, alpha = 0.02) +
   theme(
+   
     axis.title = element_text(size = 16),
     legend.text = element_text(size = 14),
     legend.title = element_text(size = 14),
@@ -1947,11 +1963,12 @@ w_vs_J <- AccessCPET_Corrected %>%
   scale_fill_manual(values = natparks.pals("Triglav")) +
   scale_x_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
   scale_y_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
-  geom_text(label = "+ , -", x = 40, y = 140, color = "black", size = 4.5, alpha = 0.02) +
-  geom_text(label = "- , +", x = 140, y = 20, color = "black", size = 4.5, alpha = 0.02) +
-  geom_text(label = "+ , +", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
-  geom_text(label = "- , -", x = 40, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "0 -> 1", x = 40, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "1 -> 0", x = 140, y = 25, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "0 -> 0", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "1 -> 1", x = 40, y = 25, color = "black", size = 4.5, alpha = 0.02) +
   theme(
+   
     axis.title = element_text(size = 16),
     legend.text = element_text(size = 14),
     legend.title = element_text(size = 14),
@@ -1986,11 +2003,12 @@ W_vs_N <- AccessCPET_Corrected %>%
   scale_fill_manual(values = natparks.pals("Triglav")) +
   scale_x_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
   scale_y_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
-  geom_text(label = "+ , -", x = 40, y = 140, color = "black", size = 4.5, alpha = 0.02) +
-  geom_text(label = "- , +", x = 140, y = 20, color = "black", size = 4.5, alpha = 0.02) +
-  geom_text(label = "+ , +", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
-  geom_text(label = "- , -", x = 40, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "0 -> 1", x = 40, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "1 -> 0", x = 140, y = 25, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "0 -> 0", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "1 -> 1", x = 40, y = 25, color = "black", size = 4.5, alpha = 0.02) +
   theme(
+   
     axis.title = element_text(size = 16),
     legend.text = element_text(size = 14),
     legend.title = element_text(size = 14),
@@ -2021,12 +2039,12 @@ H_vs_B <- AccessCPET_Corrected %>%
   scale_fill_manual(values = natparks.pals("Triglav")) +
   scale_x_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
   scale_y_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
-  geom_text(label = "+ , -", x = 40, y = 140, color = "black", size = 4.5, alpha = 0.02) +
-  geom_text(label = "- , +", x = 140, y = 20, color = "black", size = 4.5, alpha = 0.02) +
-  geom_text(label = "+ , +", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
-  geom_text(label = "- , -", x = 40, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "0 -> 1", x = 40, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "1 -> 0", x = 140, y = 25, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "0 -> 0", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "1 -> 1", x = 40, y = 25, color = "black", size = 4.5, alpha = 0.02) +
   theme(
-    legend.position = "none",
+   
     axis.title = element_text(size = 16),
     legend.text = element_text(size = 14),
     legend.title = element_text(size = 14),
@@ -2060,12 +2078,12 @@ H_vs_J <- AccessCPET_Corrected %>%
   scale_fill_manual(values = natparks.pals("Triglav")) +
   scale_x_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
   scale_y_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
-  geom_text(label = "+ , -", x = 40, y = 140, color = "black", size = 4.5, alpha = 0.02) +
-  geom_text(label = "- , +", x = 140, y = 20, color = "black", size = 4.5, alpha = 0.02) +
-  geom_text(label = "+ , +", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
-  geom_text(label = "- , -", x = 40, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "0 -> 1", x = 40, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "1 -> 0", x = 140, y = 25, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "0 -> 0", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "1 -> 1", x = 40, y = 25, color = "black", size = 4.5, alpha = 0.02) +
   theme(
-    legend.position = "none",
+   
     axis.title = element_text(size = 16),
     legend.text = element_text(size = 14),
     legend.title = element_text(size = 14),
@@ -2099,12 +2117,12 @@ H_vs_N <- AccessCPET_Corrected %>%
   scale_fill_manual(values = natparks.pals("Triglav")) +
   scale_x_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
   scale_y_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
-  geom_text(label = "+ , -", x = 40, y = 140, color = "black", size = 4.5, alpha = 0.02) +
-  geom_text(label = "- , +", x = 140, y = 20, color = "black", size = 4.5, alpha = 0.02) +
-  geom_text(label = "+ , +", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
-  geom_text(label = "- , -", x = 40, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "0 -> 1", x = 40, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "1 -> 0", x = 140, y = 25, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "0 -> 0", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "1 -> 1", x = 40, y = 25, color = "black", size = 4.5, alpha = 0.02) +
   theme(
-    legend.position = "none",
+   
     axis.title = element_text(size = 16),
     legend.text = element_text(size = 14),
     legend.title = element_text(size = 14),
@@ -2135,12 +2153,12 @@ B_vs_J <- AccessCPET_Corrected %>%
   scale_fill_manual(values = natparks.pals("Triglav")) +
   scale_x_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
   scale_y_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
-  geom_text(label = "+ , -", x = 40, y = 140, color = "black", size = 4.5, alpha = 0.02) +
-  geom_text(label = "- , +", x = 140, y = 20, color = "black", size = 4.5, alpha = 0.02) +
-  geom_text(label = "+ , +", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
-  geom_text(label = "- , -", x = 40, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "0 -> 1", x = 40, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "1 -> 0", x = 140, y = 25, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "0 -> 0", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "1 -> 1", x = 40, y = 25, color = "black", size = 4.5, alpha = 0.02) +
   theme(
-    legend.position = "none",
+   
     axis.title = element_text(size = 16),
     legend.text = element_text(size = 14),
     legend.title = element_text(size = 14),
@@ -2171,17 +2189,53 @@ B_vs_N <- AccessCPET_Corrected %>%
   scale_fill_manual(values = natparks.pals("Triglav")) +
   scale_x_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
   scale_y_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
-  geom_text(label = "+ , -", x = 40, y = 140, color = "black", size = 4.5, alpha = 0.02) +
-  geom_text(label = "- , +", x = 140, y = 20, color = "black", size = 4.5, alpha = 0.02) +
-  geom_text(label = "+ , +", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
-  geom_text(label = "- , -", x = 40, y = 20, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "0 -> 1", x = 40, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "1 -> 0", x = 140, y = 25, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "0 -> 0", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "1 -> 1", x = 40, y = 25, color = "black", size = 4.5, alpha = 0.02) +
   theme(
-    legend.position = "none",
+   
     axis.title = element_text(size = 16),
     legend.text = element_text(size = 14),
     legend.title = element_text(size = 14),
     axis.text = element_text(size = 14)
   )
+
+
+#Bruce to Neder
+
+table(Access_Interpertation_wide_Corrected$Jones, Access_Interpertation_wide_Corrected$Neder)
+
+J_vs_N <- AccessCPET_Corrected %>%  
+  mutate(
+    gender = case_when(
+      gender == 1 ~ "Male",
+      gender == 2 ~ "Female",
+      TRUE ~ NA_character_
+    )
+  ) %>% 
+  ggplot() +
+  geom_point(aes(x = Neder_Percent.Predicted, y = Jones_Percent.Predicted, color = BMI_cat, shape = gender)) +
+  geom_vline(xintercept = 80, linetype = "dashed", color = "black", size = 0.8, alpha = 0.5) +
+  geom_hline(yintercept = 80, linetype = "dashed", color = "black", size = 0.8, alpha = 0.5) +
+  labs(title = "Jones to Neder", y = "% Predicted: Jones ", 
+       x = "% Predicted: Neder", color = "BMI Category", shape = "Gender") +
+  theme_classic() +
+  scale_color_manual(values = natparks.pals("Triglav")) +
+  scale_fill_manual(values = natparks.pals("Triglav")) +
+  scale_x_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
+  scale_y_continuous(limits = (c(20,160)), breaks = seq(0,160,by = 20)) +
+  geom_text(label = "0 -> 1", x = 40, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "1 -> 0", x = 140, y = 25, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "0 -> 0", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
+  geom_text(label = "1 -> 1", x = 40, y = 25, color = "black", size = 4.5, alpha = 0.02) +
+  theme(
+    axis.title = element_text(size = 16),
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 14),
+    axis.text = element_text(size = 14)
+  )
+
 
 # ggsave("Agreement_BvsJ.png",
 #        path = "R:/AirHazardsCenter/AHBPCE-PDCEN_site data/Working Analyses/CPET Equations/Plots" )
@@ -2241,8 +2295,13 @@ AccessCPET_Corrected %>%
     bmi,
     race
   )) %>% 
-  CreateTableOne(data = ., test = FALSE, argsApprox = FALSE, argsNormal = FALSE, smd = FALSE, addOverall = TRUE) %>% 
-  summary(digits = 4)
+  tbl_summary(    
+    statistic = list(
+    all_continuous() ~ "{mean} ({sd})",
+    all_categorical() ~ "{n} / {N} ({p}%)"),
+  digits = all_continuous() ~ 2,) %>% 
+  add_n()
+
 
 
 # 1 comparing raw predicted values
@@ -2252,6 +2311,36 @@ Access_Corrected_Tidy_FORanalaysis <- Access_Percent_predicted_tidy_Corrected %>
   filter(
     Equation != "Measured"
   )
+
+Access_Percent_predicted_Corrected %>% 
+  select(-(Subject_ID))%>% 
+  tbl_summary(    
+    statistic = list(
+      all_continuous() ~ "{mean} ({sd})",
+      all_categorical() ~ "{n} / {N} ({p}%)"),
+    digits = all_continuous() ~ 2,) %>% 
+  add_n()
+
+Access_Corrected_Tidy_FORanalaysis %>% 
+  group_by(Equation,Clinical_Interpretation ) %>% 
+  summarise(count = n())
+
+Access_Interpertation_wide_Corrected %>% 
+  select(
+    FRIEND,
+    Wasserman,
+    Hansen,
+    Jones,
+    Bruce,
+    Neder
+  ) %>% 
+  tbl_summary(    
+    statistic = list(
+      all_continuous() ~ "{mean} ({sd})",
+      all_categorical() ~ "{n} / {N} ({p}%)"),
+    digits = all_continuous() ~ 2,) %>% 
+  add_n()
+
 
 Access_Corrected_Tidy_FORanalaysis$Equation <- factor(Access_Corrected_Tidy_FORanalaysis$Equation)
 
@@ -2332,15 +2421,6 @@ for (i in 1:(length(Access_equations)-1)){
   }
 }
 
-Access_Percent_predicted_Corrected %>% 
-  select(-(Subject_ID))%>% 
-  CreateTableOne(data = ., test = FALSE, argsApprox = FALSE, argsNormal = FALSE, smd = FALSE, addOverall = TRUE) %>% 
-  summary(digits = 4)
-
-Access_Corrected_Tidy_FORanalaysis %>% 
-  group_by(Equation,Clinical_Interpretation ) %>% 
-  summarise(count = n())
-
 
 
 #Kappa analysis
@@ -2404,6 +2484,10 @@ ggplot(melt(kappa_matrix), aes(x = Var1, y = Var2, fill = value))+
 
 # goal here is to see what is different 
 # all possible pairwise comparisons
+
+# 0 = no change
+# -1 = changed to normal
+# 1 = changed to abnormal
 
 Classifications_Corrected <- Access_Interpertation_wide_Corrected %>% 
   select(Subject_ID, FRIEND, Wasserman, Hansen, Bruce, Jones, Neder) %>% 
@@ -2561,9 +2645,20 @@ Classifications_Corrected <- Classifications_Corrected %>%
 
 summary(Classifications_Corrected$Status)
 # 0   1 
-# 154 151
+# 143 162 
 
-table(Classifications_Corrected$WvB)
+#making factors
+Classifications_Corrected <- Classifications_Corrected %>% 
+  mutate(across(-c("Subject_ID", "count_NoChange", "count_Reduced", "count_Normal"), as.factor))
+
+Classifications_Corrected %>% 
+tbl_summary(    
+  statistic = list(
+    all_continuous() ~ "{mean} ({sd})",
+    all_categorical() ~ "{n} / {N} ({p}%)"),
+  digits = all_continuous() ~ 2,) %>% 
+  add_n()
+
 
 Classifications_Corrected <- 
   merge(
@@ -2575,7 +2670,7 @@ Classifications_Corrected <-
 
 AccessCPET_Corrected <- 
   merge(
-    AccessCPET,
+    AccessCPET_Corrected,
     Classifications_Corrected[,c("Subject_ID", "Status")],
     by = "Subject_ID"
   )
@@ -2583,8 +2678,13 @@ AccessCPET_Corrected <-
 
 # mean values based on grouping  (no change vs change) for paper:
 Classifications_Corrected %>% 
-  CreateTableOne(data = ., test = FALSE, argsApprox = FALSE, argsNormal = FALSE, smd = FALSE, addOverall = TRUE, strata = "Status") %>% 
-  summary(digits = 4)
+  tbl_summary(    
+    by = Status,
+    statistic = list(
+      all_continuous() ~ "{mean} ({sd})",
+      all_categorical() ~ "{n} / {N} ({p}%)"),
+    digits = all_continuous() ~ 2,) %>% 
+  add_n()
 
 
 #plots:
@@ -2794,7 +2894,7 @@ Access_Percent_predicted_tidy_Corrected %>%
   scale_fill_jco() +
   labs(y = "Percent Predicted", x = "") +
   theme(
-    legend.position = "none",
+   
     axis.title = element_text(size = 16),
     legend.text = element_text(size = 14),
     legend.title = element_text(size = 14),
@@ -2815,9 +2915,9 @@ Access_Percent_predicted_tidy_Corrected %>%
   # stat_summary(fun.data = mean_sdl, fun.args = list(mult = 1), geom = "errorbar", width = 0.2) +
   theme_classic() +
   scale_fill_jco() +
-  labs(y = expression(Peak~VO[2]~(ml%*%min^-1)), x = "") +
+  labs(y = expression(Predicted~Peak~VO[2]~(ml%*%min^-1)), x = "") +
   theme(
-    legend.position = "none",
+   
     axis.title = element_text(size = 16),
     legend.text = element_text(size = 14),
     legend.title = element_text(size = 14),
@@ -2830,9 +2930,11 @@ Access_Percent_predicted_tidy_Corrected %>%
 
 (W_vs_H + W_vs_B) / ((w_vs_J) + W_vs_N) / (plot_spacer() + plot_spacer()) + plot_layout(guides = "collect") +  plot_annotation(title = "B")
 
-((H_vs_B) + (H_vs_J)) / (H_vs_N + plot_spacer()) / (plot_spacer() + plot_spacer()) + plot_layout(guides = "collect") +  plot_annotation(title = "C")
+(H_vs_B + H_vs_J) / (H_vs_N + plot_spacer()) / (plot_spacer() + plot_spacer()) + plot_layout(guides = "collect") +  plot_annotation(title = "C")
 
-((B_vs_J) + (B_vs_N)) / ((plot_spacer() + plot_spacer()) / (plot_spacer() + plot_spacer()) + plot_layout(guides = "collect") +  plot_annotation(title = "D"))
+(B_vs_J + B_vs_N) / (plot_spacer() + plot_spacer()) / (plot_spacer() + plot_spacer()) + plot_layout(guides = "collect") + plot_annotation(title = "D")
+
+(J_vs_N + plot_spacer()) / (plot_spacer() + plot_spacer()) / (plot_spacer() + plot_spacer()) + plot_layout(guides = "collect") +  plot_annotation(title = "E")
 
 
 
@@ -2928,8 +3030,12 @@ AccessCPET$phq_sob <- factor(AccessCPET$phq_sob)
 
 AccessCPET %>% 
   select(phq_sob) %>% 
-  CreateTableOne(data = ., test = FALSE, argsApprox = FALSE, argsNormal = FALSE, smd = FALSE, addOverall = TRUE) %>% 
-  summary(digits = 4)
+  tbl_summary(    
+    statistic = list(
+      all_continuous() ~ "{mean} ({sd})",
+      all_categorical() ~ "{n} / {N} ({p}%)"),
+    digits = all_continuous() ~ 2,) %>% 
+  add_n()
 
 
 
