@@ -2624,6 +2624,9 @@ Classifications_Corrected <- Classifications_Corrected %>%
     count_Normal = rowSums(Classifications_Corrected[,columns_check] == -1, na.rm = TRUE)
   )
 
+
+
+
 Classifications_Corrected %>%
   count(count_NoChange == 15) 
 
@@ -2802,7 +2805,7 @@ SpiderPlot <- Access_Corrected_Tidy_FORanalaysis %>%
   group_by(gender, Equation, Spider_Grouping) %>% 
   summarise(Mean_Predicted = mean(Percent.Predicted), .groups = "drop")
 
-SpiderPlot 
+
 
 Spider_groups <- unique(SpiderPlot$Spider_Grouping)
 
@@ -2880,8 +2883,225 @@ SpiderPlot_female
 SpiderPlot_male + SpiderPlot_female + plot_layout(guides = "collect") & theme(legend.position = "bottom")
 
 
+# Making separate spider plots to see if tats easier to disgust 
+
+SpiderPlot_Gender <- Access_Corrected_Tidy_FORanalaysis %>% 
+  group_by(gender, Equation) %>% 
+  summarise(Mean_Predicted = mean(Percent.Predicted), .groups = "drop")
+
+# Differences in gender:
+SpiderPlot_Gender %>% 
+  mutate(gender = 
+    case_when(
+      gender == 1 ~ "Male",
+      gender == 2 ~ "Female"
+    )) %>% 
+  ggplot(aes(x = gender, y = Mean_Predicted, group = Equation, color = Equation)) +
+  geom_line(size = 1) + 
+  geom_point() +
+  labs(title = "Mean Percent Predicted Per Gender", y = "Percent Predicted", x = "") +
+  theme(
+    axis.title = element_text(size = 16),
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 14),
+    axis.text = element_text(size = 14)
+
+  ) +
+  scale_fill_jco() +
+  scale_color_jco()
 
 
+#Difference in Mode
+
+SpiderPlot_Mode <- Access_Corrected_Tidy_FORanalaysis %>% 
+  group_by(Mode, Equation) %>% 
+  summarise(Mean_Predicted = mean(Percent.Predicted), .groups = "drop")
+
+
+SpiderPlot_Mode %>% 
+  ggplot(aes(x = Mode, y = Mean_Predicted, group = Equation, color = Equation)) +
+  geom_line(size = 1) + 
+  geom_point() +
+  labs(title = "Mean Percent Predicted Per Gender", y = "Percent Predicted", x = "") +
+  theme(
+    axis.title = element_text(size = 16),
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 14),
+    axis.text = element_text(size = 14)
+    
+  ) +
+  scale_fill_jco() +
+  scale_color_jco()
+
+
+# spider plot, gender vs BMI
+
+SpiderPlot_GendervsBMI <- Access_Corrected_Tidy_FORanalaysis %>% 
+  mutate(
+    Spider_Grouping = factor(case_when(
+      bmi <= 28 ~ "BMI 1",
+      
+      bmi > 28 & bmi <= 35 ~ "BMI 2",
+
+      bmi > 35 ~ "BMI 3",
+
+      TRUE ~ NA_character_)))
+
+SpiderPlot_GendervsBMI <- SpiderPlot_GendervsBMI %>% 
+  group_by(gender, Equation, Spider_Grouping) %>% 
+  summarise(Mean_Predicted = mean(Percent.Predicted), .groups = "drop")
+
+ 
+SpiderPlot_maleBMI <- SpiderPlot_GendervsBMI %>% 
+  filter(gender == 1) %>% 
+  ggplot() +
+  geom_polygon(aes(x = Spider_Grouping, y = Mean_Predicted, color = Equation, group = Equation, fill = Equation), linewidth = 1, alpha = 0.1) +
+  coord_radar(clip = "off") +
+  theme_radar() +
+  
+  
+  scale_x_discrete(guide = guide_axis(n.dodge = 2)) +
+  scale_y_continuous(breaks = seq(50, 120, by = 10), limits = c(50, 120), expand = c(0,0)) +
+  
+  
+  geom_text(data = data.frame(x = rep("BMI 3", 6), y = seq(60, 110, by = 10)), aes(x = x, y = y, label = y), 
+            position = position_nudge(x = 0.5), angle = 0, vjust = 0.5, hjust = 0.5) +
+  
+  theme(
+    plot.margin = unit(c(0,30,0,0), "pt"),
+    axis.text.x = element_text(size = 12),
+    axis.ticks = element_line(color = 2,
+                              linewidth = 2),
+    axis.title.x = element_blank(),
+    axis.title.y = element_blank(),
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    legend.title = element_blank(),
+    legend.position = "bottom"  
+  ) +
+  scale_fill_jco() +
+  scale_color_jco()
+
+SpiderPlot_maleBMI
+
+
+#BMI plot for females
+SpiderPlot_femaleBMI <- SpiderPlot_GendervsBMI %>% 
+  filter(gender == 2) %>% 
+  ggplot() +
+  geom_polygon(aes(x = Spider_Grouping, y = Mean_Predicted, color = Equation, group = Equation, fill = Equation), linewidth = 1, alpha = 0.1) +
+  coord_radar(clip = "off") +
+  theme_radar() +
+  
+  
+  scale_x_discrete(guide = guide_axis(n.dodge = 2)) +
+  scale_y_continuous(breaks = seq(50, 120, by = 10), limits = c(50, 120), expand = c(0,0)) +
+  
+  
+  geom_text(data = data.frame(x = rep("BMI 3", 6), y = seq(60, 110, by = 10)), aes(x = x, y = y, label = y), 
+            position = position_nudge(x = 0.5), angle = 0, vjust = 0.5, hjust = 0.5) +
+
+  theme(
+    plot.margin = unit(c(0,30,0,0), "pt"),
+    axis.text.x = element_text(size = 12),
+    axis.ticks = element_line(color = 2,
+                              linewidth = 2),
+    axis.title.x = element_blank(),
+    axis.title.y = element_blank(),
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    legend.title = element_blank(),
+    legend.position = "bottom"  
+  ) +
+  scale_fill_jco() +
+  scale_color_jco()
+
+SpiderPlot_femaleBMI
+
+
+SpiderPlot_maleBMI + SpiderPlot_femaleBMI + plot_layout(guides = "collect") & theme(legend.position = "bottom") + plot_annotation(title = "A")
+
+# spider plot, gender vs Age
+
+SpiderPlot_GendervAge <- Access_Corrected_Tidy_FORanalaysis %>% 
+  mutate(
+    Spider_Grouping = factor(case_when(
+      age <= 36 ~ "Age 1",
+      age > 36 & age <= 51 ~ "Age 2",
+      age > 51 ~ "Age 3",
+      TRUE ~ NA_character_)))
+
+SpiderPlot_GendervAge <- SpiderPlot_GendervAge %>% 
+  group_by(gender, Equation, Spider_Grouping) %>% 
+  summarise(Mean_Predicted = mean(Percent.Predicted), .groups = "drop")
+
+
+SpiderPlot_maleAge <- SpiderPlot_GendervAge %>% 
+  filter(gender == 1) %>% 
+  ggplot() +
+  geom_polygon(aes(x = Spider_Grouping, y = Mean_Predicted, color = Equation, group = Equation, fill = Equation), linewidth = 1, alpha = 0.1) +
+  coord_radar(clip = "off") +
+  theme_radar() +
+  
+  
+  scale_x_discrete(guide = guide_axis(n.dodge = 2)) +
+  scale_y_continuous(breaks = seq(50, 120, by = 10), limits = c(50, 120), expand = c(0,0)) +
+  
+  
+  geom_text(data = data.frame(x = rep("Age 3", 6), y = seq(60, 110, by = 10)), aes(x = x, y = y, label = y), 
+            position = position_nudge(x = 0.5), angle = 0, vjust = 0.5, hjust = 0.5) +
+  
+  theme(
+    plot.margin = unit(c(0,30,0,0), "pt"),
+    axis.text.x = element_text(size = 12),
+    axis.ticks = element_line(color = 2,
+                              linewidth = 2),
+    axis.title.x = element_blank(),
+    axis.title.y = element_blank(),
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    legend.title = element_blank(),
+    legend.position = "bottom"  
+  ) +
+  scale_fill_jco() +
+  scale_color_jco()
+
+SpiderPlot_maleAge
+
+SpiderPlot_femaleAge <- SpiderPlot_GendervAge %>% 
+  filter(gender == 2) %>% 
+  ggplot() +
+  geom_polygon(aes(x = Spider_Grouping, y = Mean_Predicted, color = Equation, group = Equation, fill = Equation), linewidth = 1, alpha = 0.1) +
+  coord_radar(clip = "off") +
+  theme_radar() +
+  
+  
+  scale_x_discrete(guide = guide_axis(n.dodge = 2)) +
+  scale_y_continuous(breaks = seq(50, 120, by = 10), limits = c(50, 120), expand = c(0,0)) +
+  
+  
+  geom_text(data = data.frame(x = rep("Age 3", 6), y = seq(60, 110, by = 10)), aes(x = x, y = y, label = y), 
+            position = position_nudge(x = 0.5), angle = 0, vjust = 0.5, hjust = 0.5) +
+  
+  theme(
+    plot.margin = unit(c(0,30,0,0), "pt"),
+    axis.text.x = element_text(size = 12),
+    axis.ticks = element_line(color = 2,
+                              linewidth = 2),
+    axis.title.x = element_blank(),
+    axis.title.y = element_blank(),
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    legend.title = element_blank(),
+    legend.position = "bottom"  
+  ) +
+  scale_fill_jco() +
+  scale_color_jco()
+
+SpiderPlot_femaleAge
+
+
+SpiderPlot_maleAge + SpiderPlot_femaleAge + plot_layout(guides = "collect") & theme(legend.position = "bottom") + plot_annotation(title = "B")
 
 # ALL PLOTS FOR PAPER 1.0 -----------------------------------------------------
 
@@ -2923,6 +3143,10 @@ Access_Percent_predicted_tidy_Corrected %>%
     legend.title = element_text(size = 14),
     axis.text = element_text(size = 14)
   )
+
+# Figure 2: Spider Plot separated 
+((SpiderPlot_maleBMI | SpiderPlot_femaleBMI) + plot_layout(tag_level = 'new')) / ((SpiderPlot_maleAge | SpiderPlot_femaleAge) + plot_layout(tag_level = 'new')) + plot_layout(guides = "collect") + plot_annotation(tag_levels = c("A", "1")) & theme(legend.position = "bottom") 
+
 
 # Figure 4 of paper: agreement plots for each pair using the corrected dataset 
 
