@@ -2768,8 +2768,16 @@ Access_Corrected_Tidy_FORanalaysis %>%
   group_by(gender) %>% 
   summarise(meanW = mean(Wasserman_Predicted), meanB = mean(Bruce_Predicted, na.rm = TRUE))
 
+  AccessCPET %>% 
+    group_by(gender) %>% 
+    summarise(mean1 = mean(age), mean2 = mean(weight_kg), mean3 = mean(height_cm))
+  
 
-
+  
+  AccessCPET %>% 
+    summarise(mean1 = mean(age), mean2 = mean(weight_kg), mean3 = mean(height_cm))
+  
+  
 # Spiderweb plot ----------------------------------------------------------
 
 #need to make groups
@@ -3162,7 +3170,22 @@ Access_Percent_predicted_tidy_Corrected %>%
 
 
 
+#Analaysis for paper only
+#getting numbrs for changes in BMI in our populations
 
+Access_Corrected_Tidy_FORanalaysis %>% 
+  mutate(
+    Spider_Grouping = factor(case_when(
+      bmi <= 28 ~ "BMI 1",
+      
+      bmi > 28 & bmi <= 35 ~ "BMI 2",
+      
+      bmi > 35 ~ "BMI 3",
+      
+      TRUE ~ NA_character_))) %>% 
+  group_by(Equation, Spider_Grouping) %>% 
+  summarise(Mean_Predicted = mean(Percent.Predicted), .groups = "drop")
+  
 
 #-------------------------------------------------------------------------------
 
