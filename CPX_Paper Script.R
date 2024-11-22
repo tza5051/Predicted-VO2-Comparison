@@ -9,6 +9,7 @@
 
 
 library(tidyverse)
+library(labelled)
 library(easystats)
 library(naniar)
 #library(readr)
@@ -284,6 +285,19 @@ AccessCPET <- AccessCPET %>%
   )
 
 
+#bring in redcap data for race
+IDS <- AccessCPET %>% 
+  pull(Subject_ID)
+
+Redcap_PDCEN <- read.csv("//r04.med.va.gov/v03/EAS/Research/WRIISC/Databases/Pulmonary/PDCEN/Downloads/PDCEN_Database_files/PDCEN_REDCAP_8_22_24.csv")
+Redcap_PDCEN <- Redcap_PDCEN %>% 
+  filter(Subject_ID %in% IDS) %>% 
+  select(
+    Subject_ID, 
+    race_redcap = race, 
+    ethncity_redcap = ethncity, 
+    ethnic_gli
+  )
 
 
 # Access_CPET is the base file used to create everything 
@@ -1486,6 +1500,8 @@ shapiro.test(AccessCPET_Corrected$Neder_Predicted)
 
 shapiro.test(AccessCPET_Corrected$weight_kg)
 shapiro.test(AccessCPET_Corrected$height_cm)
+shapiro.test(AccessCPET_Corrected$age)
+
 
 
 # mean values for paper
@@ -1501,7 +1517,6 @@ AccessCPET_Corrected %>%
   )) %>% 
   tbl_summary(    
     statistic = list(
-    all_continuous() ~ "{mean} ({sd})",
     all_categorical() ~ "{n} / {N} ({p}%)"),
   digits = all_continuous() ~ 2,) %>% 
   add_n()
@@ -1561,39 +1576,6 @@ conover <- frdAllPairsExactTest(y = Access_Corrected_Tidy_FORanalaysis$Predicted
                                 blocks = Access_Corrected_Tidy_FORanalaysis$Subject_ID,
                                 p.adjust.methods = "bonferroni")
 conover
-
-
-
-# 
-
-
-
-#         FRIEND  Wasserman Hansen  Bruce  
-# Wasserman 0.27    -         -       -      
-#   Hansen    < 2e-16 < 2e-16   -       -      
-#   Bruce     3.7e-16 2.6e-12   < 2e-16 -      
-#   Jones     5.6e-07 9.4e-10   7.0e-06 < 2e-16
-
-
-# 2: compare clinical interpretation (within subject)
-# is there a difference between clinical interpretation
-# setting up wasserman to be the interpect/reference 
-
-
-# Access_Percent_predicted_tidy_Analysis$Equation <- factor(Access_Percent_predicted_tidy_Analysis$Equation,
-#                                                           levels =  c( "FRIEND", "Wasserman",    "Hansen",    "Bruce"  ,  "Jones"))                                                  
-# 
-# 
-# Access_glmm <- glmer(Clinical_Interpretation ~ Equation + (1|Subject_ID),
-#                      data = Access_Percent_predicted_tidy_Analysis,
-#                      family = binomial)
-# 
-# summary(Access_glmm) 
-# exp(fixef(Access_glmm))
-# 
-# tidy(Access_glmm, effects = "fixed", conf.int = TRUE, exponentiate = TRUE)
-
-
 
 
 # Calculating Cohen's Kappa for each pair
@@ -1888,7 +1870,6 @@ Classifications_Corrected %>%
   tbl_summary(    
     by = Status,
     statistic = list(
-      all_continuous() ~ "{mean} ({sd})",
       all_categorical() ~ "{n} / {N} ({p}%)"),
     digits = all_continuous() ~ 2,) %>% 
   add_n()
@@ -1922,7 +1903,7 @@ Classifications_Corrected %>%
 # Mannwhitneyfor height, weight, and age between two 
 # looping it in 
 
-Anaylsis_Variables <- c("age", "weight_kg", "height_cm", "bmi")
+Anaylsis_Variables <- c("age", "weight_kg", "height_cm", "bmi", "VO2_peak.actual","FRIEND_Predicted", "Wasserman_Predicted", "Hansen_Predicted","Bruce_Predicted","Jones_Predicted","Neder_Predicted")
 
 # Assuming your data frame my_data has 'group', 'age', 'height', and 'weight' 
 # Function to perform Kruskal-Wallis and then Dunn's test 
@@ -1935,7 +1916,7 @@ perform_tests <- function(Anaylsis_Variables, data) {
   return(list(Wilcox = MW_test, wilcox_effect = MW_effectsize)) }
 
 
-# Check if significant to proceed with Dunn's test 
+
 
 # Apply the function to each variable and collect results
 results_wilcox <- lapply(Anaylsis_Variables, perform_tests, data = Classifications_Corrected) 
@@ -1946,8 +1927,14 @@ results_wilcox
 
 
 chisq.test(Classifications_Corrected$gender, Classifications_Corrected$Status)
+cramers_v(Classifications_Corrected$gender, Classifications_Corrected$Status)
+
 chisq.test(Classifications_Corrected$race, Classifications_Corrected$Status)
+cramers_v(Classifications_Corrected$race, Classifications_Corrected$Status)
+
 chisq.test(Classifications_Corrected$Mode, Classifications_Corrected$Status)
+cramers_v(Classifications_Corrected$Mode, Classifications_Corrected$Status)
+
 
 #specif numbers for paper.
 # Looking at effect of sex with WvsB
@@ -1982,6 +1969,17 @@ Access_Corrected_Tidy_FORanalaysis %>%
     summarise(mean1 = mean(age), mean2 = mean(weight_kg), mean3 = mean(height_cm))
   
   
+# seeing if percent predicted is different between the groups
+Access_Corrected_Tidy_FORanalaysis <- 
+  merge(
+    Access_Corrected_Tidy_FORanalaysis,
+    Classifications_Corrected[,c("Subject_ID", "Status")],
+    by = "Subject_ID"
+  )
+  
+wilcox.test(Predicted ~ Status, data = Access_Corrected_Tidy_FORanalaysis) 
+wilcox_effsize(Predicted ~ Status, data = Access_Corrected_Tidy_FORanalaysis) 
+
 # Spiderweb plot/analysis ----------------------------------------------------------
 
 #need to make groups
@@ -2012,88 +2010,6 @@ Access_Corrected_Tidy_FORanalaysis <- Access_Corrected_Tidy_FORanalaysis %>%
       bmi > 35 & age > 51 ~ "BMI 3 | Age 3",
       
       TRUE ~ NA_character_)))
-
-# SpiderPlot <- Access_Corrected_Tidy_FORanalaysis %>% 
-#   group_by(gender, Equation, Spider_Grouping) %>% 
-#   summarise(Mean_Predicted = mean(Percent.Predicted), .groups = "drop")
-# 
-# 
-# 
-# Spider_groups <- unique(SpiderPlot$Spider_Grouping)
-# 
-# SpiderPlot_male <- SpiderPlot %>% 
-#     filter(gender == 1) %>% 
-#   ggplot() +
-#   geom_polygon(aes(x = Spider_Grouping, y = Mean_Predicted, color = Equation, group = Equation, fill = Equation), linewidth = 1, alpha = 0.1) +
-#   coord_radar(clip = "off") +
-#   theme_radar() +
-#   
-#   
-#   scale_x_discrete(guide = guide_axis(n.dodge = 2)) +
-#   scale_y_continuous(breaks = seq(50, 120, by = 10), limits = c(50, 120), expand = c(0,0)) +
-#   
-#   
-#   geom_text(data = data.frame(x = rep("BMI 1 | Age 1", 6), y = seq(60, 110, by = 10)), aes(x = x, y = y, label = y), 
-#             position = position_nudge(x = 0.5), angle = 0, vjust = 0.5, hjust = 0.5) +
-#   
-#   labs(title = "Percent Predicted Per Equation for Males") +
-#   theme(
-#     plot.margin = unit(c(0,30,0,0), "pt"),
-#     axis.text.x = element_text(size = 12),
-#     axis.ticks = element_line(color = 2,
-#                               linewidth = 2),
-#     axis.title.x = element_blank(),
-#     axis.title.y = element_blank(),
-#     axis.text.y = element_blank(),
-#     axis.ticks.y = element_blank(),
-#     legend.title = element_blank(),
-#     legend.position = "bottom"  
-#   ) +
-#   scale_fill_jco() +
-#   scale_color_jco()
-# 
-# 
-# SpiderPlot_male
-#   
-# SpiderPlot_female <- SpiderPlot %>% 
-#      filter(gender == 2) %>% 
-#      ggplot() +
-#      geom_polygon(aes(x = Spider_Grouping, y = Mean_Predicted, color = Equation, group = Equation, fill = Equation), linewidth = 1, alpha = 0.1) +
-#      coord_radar(clip = "off") +
-#      theme_radar() +
-#      
-#      scale_x_discrete(guide = guide_axis(n.dodge = 2)) +
-#      scale_y_continuous(breaks = seq(50, 120, by = 10), limits = c(50, 120), expand = c(0,0)) +
-#      
-#      
-#      geom_text(data = data.frame(x = rep("BMI 1 | Age 1", 6), y = seq(60, 110, by = 10)), aes(x = x, y = y, label = y), 
-#                position = position_nudge(x = 0.5), angle = 0, vjust = 0.5, hjust = 0.5) +
-#      
-#   labs(title = "Percent Predicted Per Equation for Females") +
-#   theme(
-#        axis.text.x = element_text(size = 12),
-#        axis.ticks = element_line(color = 2,
-#                                  linewidth = 2),
-#        # panel.background = element_rect(fill = "white", color = "white"),
-#        # panel.grid = element_blank(),
-#        # panel.grid.major.x = element_blank(),
-#        axis.title.x = element_blank(),
-#        axis.title.y = element_blank(),
-#        axis.text.y = element_blank(),
-#        axis.ticks.y = element_blank(),
-#        legend.title = element_blank()
-#        # Use gray text for the region names
-#        # Move the legend to the bottom
-# 
-#      ) +
-#   scale_fill_jco() +
-#   scale_color_jco()
-#    
-# SpiderPlot_female
-#    
-#    
-# SpiderPlot_male + SpiderPlot_female + plot_layout(guides = "collect") & theme(legend.position = "bottom")
-
 
 # Making separate spider plots for age and BMI 
 
@@ -2410,29 +2326,8 @@ kruskal_results
 
 # ALL PLOTS FOR PAPER 1.0 -----------------------------------------------------
 
-# Figure 3 of paper: Violin plot 
-Access_Percent_predicted_tidy_Corrected %>% 
-  filter(Equation != "Measured") %>% 
-  ggplot(aes(x = Equation, y = Percent.Predicted)) +
-  geom_violindot(aes(fill = Equation), binwidth = 5, dots_size = 0.1, color_dots ="black", fill_dots = "black") +
-  theme_classic() +
-  scale_fill_jco() +
-  labs(y = "Percent Predicted", x = "") +
-  theme(
-   
-    axis.title = element_text(size = 16),
-    legend.text = element_text(size = 14),
-    legend.title = element_text(size = 14),
-    axis.text = element_text(size = 14)
-  )
-
-
-# Figure 2, Spider Plot:
-SpiderPlot_male + SpiderPlot_female + plot_layout(guides = "collect") & theme(legend.position = "bottom")
-
-
 # Figure 1 of paper: Violin plot of % Predicted VȮ2 across equations.
-Access_Percent_predicted_tidy_Corrected %>% 
+Violin_Pred <- Access_Percent_predicted_tidy_Corrected %>% 
   filter(Equation != "Measured") %>%
   ggplot(aes(x = Equation, y = Predicted)) +
   geom_violindot(aes(fill = Equation), binwidth = 100, dots_size = 0.1, color_dots ="black", fill_dots = "black") +
@@ -2442,12 +2337,85 @@ Access_Percent_predicted_tidy_Corrected %>%
   scale_fill_jco() +
   labs(y = expression(Predicted~Peak~VO[2]~(ml%*%min^-1)), x = "") +
   theme(
-   
+    legend.position = "none",
+    axis.title.y = element_text(size = 16),
+    axis.text.x =  element_blank(),
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 14),
+    axis.text = element_text(size = 14)
+  )
+
+
+# Figure 1 of paper: Violin plot 
+Violin_Percent <- Access_Percent_predicted_tidy_Corrected %>% 
+  filter(Equation != "Measured") %>% 
+  ggplot(aes(x = Equation, y = Percent.Predicted)) +
+  geom_violindot(aes(fill = Equation), binwidth = 5, dots_size = 0.1, color_dots ="black", fill_dots = "black") +
+  theme_classic() +
+  scale_fill_jco() +
+  labs(y = "Percent Predicted", x = "") +
+  theme(
+    legend.position = "none",
     axis.title = element_text(size = 16),
     legend.text = element_text(size = 14),
     legend.title = element_text(size = 14),
     axis.text = element_text(size = 14)
   )
+
+
+
+
+#Figure 2 trying to look at them seperatly and grouping on word myself
+emptyplot <- 
+AgreementPlots %>%  
+  ggplot(color = "white") +
+  #adding line for agreements + shades    
+  geom_vline(xintercept = 80, linetype = "dashed", color = "white", size = 0.8, alpha = 0.5) +
+  geom_hline(yintercept = 80, linetype = "dashed", color = "white", size = 0.8, alpha = 0.5) +
+  geom_abline(slope = 1, intercept = 0, color = "white", size = 0.8, alpha = 0.5) +
+  geom_rect(aes(xmin = 80, xmax = 160, ymin = 0, ymax = 80), fill = "white", alpha = 0.02) +
+  geom_rect(aes(xmin = 0, xmax = 80, ymin = 80, ymax = 160), fill = "white", alpha = 0.02) +
+  
+  geom_point(aes(x = Wasserman_Percent.Predicted, y = FRIEND_Percent.Predicted, color = BMI_cat, shape = Sex), alpha = 0.0) +
+  
+  #color and legends
+  scale_color_manual(values = Agreement_colors) +
+  scale_fill_manual(values = Agreement_colors) +
+  #scale_shape_manual(values = c(16,17,16,17,16,17)) +
+  coord_equal(xlim = c(0,160), ylim = c(0,160) ) +
+  scale_x_continuous(breaks = seq(0,160,by = 20)) +
+  scale_y_continuous(breaks = seq(0,160,by = 20)) +
+  theme_void() +
+  theme(
+    legend.position = "none",
+    panel.grid = element_blank() )
+
+
+
+P1 <- (F_vs_W + F_vs_H ) & theme(legend.position = "none") 
+P2 <- (F_vs_B + F_vs_J) & theme(legend.position = "none") 
+P3 <- (F_vs_N + emptyplot)  & theme(legend.position = "none")
+
+
+
+
+(W_vs_H + W_vs_B) + plot_layout(guides = "collect") 
+(w_vs_J + W_vs_N) + plot_layout(guides = "collect") 
+
+(H_vs_B + H_vs_J) + plot_layout(guides = "collect") 
+(H_vs_N + plot_spacer()) + plot_layout(guides = "collect") 
+
+(B_vs_J + B_vs_N) + plot_layout(guides = "collect") 
+(J_vs_N + plot_spacer()) + plot_layout(guides = "collect") 
+
+
+#Figure one:
+(Violin_Pred / Violin_Percent) 
+
+# Figure 2, Spider Plot:
+(SpiderPlot_maleBMI | SpiderPlot_femaleBMI) + plot_layout(guides = "collect") & theme(legend.position = "bottom")
+
+
 
 # Figure 2: Spider Plot separated 
 ((SpiderPlot_maleBMI | SpiderPlot_femaleBMI) + plot_layout(tag_level = 'new')) / ((SpiderPlot_maleAge | SpiderPlot_femaleAge) + plot_layout(tag_level = 'new')) + plot_layout(guides = "collect") & theme(legend.position = "bottom") 
@@ -2465,20 +2433,6 @@ Access_Percent_predicted_tidy_Corrected %>%
 
 (J_vs_N + plot_spacer()) / (plot_spacer() + plot_spacer()) / (plot_spacer() + plot_spacer()) + plot_layout(guides = "collect") +  plot_annotation(title = "E")
 
-
-#Figure 4 trying to look at them seperatly and grouping on word myself
-(F_vs_W + F_vs_H) + plot_layout(guides = "collect") 
-(F_vs_B + F_vs_J) + plot_layout(guides = "collect") 
-(F_vs_N + plot_spacer()) + plot_layout(guides = "collect") 
-
-(W_vs_H + W_vs_B) + plot_layout(guides = "collect") 
-(w_vs_J + W_vs_N) + plot_layout(guides = "collect") 
-
-(H_vs_B + H_vs_J) + plot_layout(guides = "collect") 
-(H_vs_N + plot_spacer()) + plot_layout(guides = "collect") 
-
-(B_vs_J + B_vs_N) + plot_layout(guides = "collect") 
-(J_vs_N + plot_spacer()) + plot_layout(guides = "collect") 
 
 #Analaysis for paper only
 #getting numbrs for changes in BMI in our populations
@@ -3781,7 +3735,138 @@ AccessCPET %>%
 # 
 
 
+#getting Race information
+
+AccessCPET <- 
+  merge(
+    AccessCPET,
+    Redcap_PDCEN[,c("Subject_ID", "race_redcap" )],
+    by = "Subject_ID",
+    all.x = TRUE
+  )
+
+Pre_Demo <- read.csv("Clincal_Demo.csv")
+
+Pre_Demo <- Pre_Demo %>% 
+  rename(
+    Subject_ID = WRIISCID
+  )
+
+AccessCPET <- 
+  merge(
+    AccessCPET,
+    Pre_Demo[,c("Subject_ID", "race_ethnicity" )],
+    by = "Subject_ID",
+    all.x = TRUE
+  )
+
+
+AccessCPET <- AccessCPET %>% 
+  mutate(
+    Race_Combined = case_when(
+      is.na(race_redcap) ~ race_ethnicity,
+      TRUE ~ race_redcap
+    )
+  )
+
+
+AccessCPET <- AccessCPET %>% 
+  mutate(
+    Race_Combined = case_when(
+      is.na(Race_Combined) ~ race,
+      TRUE~ Race_Combined))
+
+AccessCPET <- AccessCPET %>% 
+  mutate(
+    Race_Combined = case_when(
+      Race_Combined == "White" ~ "Caucasian",
+      Race_Combined == "African-American" ~ "Black",
+      Race_Combined == "Black or African-American" ~ "Black",
+      Race_Combined == "American Indian or Alaskan tive" ~ "Native American",
+      Race_Combined == "Mixed" ~ "Other",
+      TRUE ~Race_Combined))
+
+
+AccessCPET %>% 
+  select(
+    race,
+    Race_Combined
+  ) %>% 
+  tbl_summary()
+
+AccessCPET <- 
+  merge(
+    AccessCPET,
+    AccessCPET_Corrected[,c("Subject_ID", "Status")],
+    by = "Subject_ID"
+  )
+
+AccessCPET %>% 
+  select(
+    age,
+    gender,
+    bmi,
+    weight_kg,
+    height_cm,
+    Mode,
+    VO2_peak.actual,
+    race,
+    Race_Combined,
+    Status
+  ) %>% 
+  tbl_summary(
+    by = "Status"
+  )
+
+
+#######TABELS
+
+#trying to use gt tables to get better looking tables
+
+# Demographic table:
+
+AccessCPET_Corrected %>% 
+  select(
+    Gender = gender, 
+    Age = age, 
+    BMI = bmi, 
+    "Mode of Testing" = Mode, 
+    Race = race,
+    "Measured VO2" =
+         VO2_peak.actual) %>%
+  tbl_summary(
+    statistic = all_continuous() ~ "{median} ({IQR})"
+  )
+
+AccessCPET_Corrected %>% 
+  select(gender, age, bmi, Mode, race, 
+         VO2_peak.actual, Status) %>% 
+  tbl_summary(by = Status)
+
+
+AccessCPET_Corrected %>% 
+  select(gender, age, bmi, Mode, race, Status, ) %>% 
+  tbl_summary(
+    by = Status
+  )
 
 
 
+# table 4:
+Access_Corrected_Tidy_FORanalaysis %>% 
+  select(Equation, Predicted, Percent.Predicted, Clinical_Interpretation) %>% 
+  mutate(
+    Clinical_Interpretation = case_when(
+      Clinical_Interpretation == "0" ~ "Normal Exercise Tolerance",
+      Clinical_Interpretation == "1" ~ "Reduced Exercise Tolerance"
+    )
+  ) %>% 
+  tbl_summary(
+    by = Equation,
+    label = list(
+      Clinical_Interpretation = "Clinical Interpertation",
+      Predicted = "Predicted VO<sub>2</sub>",
+      Percent.Predicted = "Percent Predicted (%)"),
+    digits = all_continuous() ~ 2
+  ) 
 
