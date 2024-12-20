@@ -1,5 +1,6 @@
-# Making a new script to re-organize the orginal 
+# Making a new script to re-organize the original 
 # using only the Access section. 
+# script below is used for all anaylsis for the CPET paper
 
 
 #github change 
@@ -62,10 +63,13 @@ library(NatParksPalettes)
 
 # Bringing in Data --------------------------------------------------------
 
+#data is from both pre and post PDCEN
+# all data from CPET ODC file
 
 AccessCPET <- read_excel("R:/WRIISC/Databases/Pulmonary/PDCEN/Downloads/CPET_ODC_7_1_24.xlsx")
 AccessCPET <- clean_names(AccessCPET)
 
+# selecting the variables needed for analaysis
 AccessCPET <- AccessCPET %>% 
   filter(!is.na(wriiscid)) %>% 
   select(
@@ -83,6 +87,10 @@ AccessCPET <- AccessCPET %>%
     VO2_kg.peak	=	eperf_vo2kg_peak)
 
 Access_IDS <- AccessCPET$wriiscid
+
+## DEMOGRPAHICS FOR PAPER-------------------------------------------------------------------------------
+
+# Code below brings in data from pre pdcen and data from redcap fro pdcen to get race combined
 
 AccessPatient2023 <-  read_excel("R:/WRIISC/Databases/Pulmonary/PDCEN/Downloads/Patient_ODC_7_1_24.xlsx")
 AccessPatient2023 <- clean_names(AccessPatient2023)
@@ -121,7 +129,6 @@ rm(AccessPFT2023
 )
 
 
-#write.csv(colnames(PDCEN_CPET), "Variables_CPET.csv",row.names = FALSE)
 
 AccessCPET <-
   merge(
@@ -137,6 +144,121 @@ AccessCPET <- AccessCPET %>%
   filter(
     !is.na(VO2.peak)
   )
+
+
+
+
+IDS <- AccessCPET %>% 
+  pull(Subject_ID)
+
+Redcap_PDCEN <- read.csv("//r04.med.va.gov/v03/EAS/Research/WRIISC/Databases/Pulmonary/PDCEN/Downloads/PDCEN_Database_files/PDCEN_REDCAP_8_22_24.csv")
+Redcap_PDCEN <- Redcap_PDCEN %>% 
+  filter(Subject_ID %in% IDS) %>% 
+  select(
+    Subject_ID, 
+    race_redcap = race, 
+    ethncity_redcap = ethncity, 
+    ethnic_gli
+  )
+
+#combinging race
+
+AccessCPET <- 
+  merge(
+    AccessCPET,
+    Redcap_PDCEN[,c("Subject_ID", "race_redcap" )],
+    by = "Subject_ID",
+    all.x = TRUE
+  )
+
+#pre pdcen demo from Greg
+Pre_Demo <- read.csv("Clincal_Demo.csv")
+
+Pre_Demo <- Pre_Demo %>% 
+  rename(
+    Subject_ID = WRIISCID
+  )
+
+AccessCPET <- 
+  merge(
+    AccessCPET,
+    Pre_Demo[,c("Subject_ID", "race_ethnicity" )],
+    by = "Subject_ID",
+    all.x = TRUE
+  )
+
+
+AccessCPET <- AccessCPET %>% 
+  mutate(
+    Race_Combined = case_when(
+      is.na(race_redcap) ~ race_ethnicity,
+      TRUE ~ race_redcap
+    )
+  )
+
+
+AccessCPET <- AccessCPET %>% 
+  mutate(
+    Race_Combined = case_when(
+      is.na(Race_Combined) ~ race,
+      TRUE~ Race_Combined))
+
+
+# final list used for paper. 
+
+AccessCPET <- AccessCPET %>% 
+  mutate(
+    Race_Combined = case_when(
+      Race_Combined == "White" ~ "Caucasian",
+      Race_Combined == "African-American" ~ "Black",
+      Race_Combined == "Black or African-American" ~ "Black",
+      Race_Combined == "American Indian or Alaskan tive" ~ "Other",
+      Race_Combined == "Mixed" ~ "Other",
+      Race_Combined == "Pacific Islander" ~ "Other",
+      Race_Combined == "Native American" ~ "Other",
+      TRUE ~Race_Combined))
+
+
+AccessCPET %>% 
+  select(
+    race,
+    race_ethnicity,
+    race_redcap,
+    Race_Combined
+  )
+
+
+AccessCPET %>% 
+  select(
+    race,
+    Race_Combined
+  ) %>% 
+  tbl_summary()
+
+AccessCPET <- 
+  merge(
+    AccessCPET,
+    AccessCPET_Corrected[,c("Subject_ID", "Status")],
+    by = "Subject_ID"
+  )
+
+AccessCPET %>% 
+  select(
+    age,
+    gender,
+    bmi,
+    weight_kg,
+    height_cm,
+    Mode,
+    VO2_peak.actual,
+    race,
+    Race_Combined,
+    Status
+  ) %>% 
+  tbl_summary(
+    
+  )
+
 
 # Setting Up dataset for predicted equations
 
@@ -285,29 +407,13 @@ AccessCPET <- AccessCPET %>%
   )
 
 
-#bring in redcap data for race
-IDS <- AccessCPET %>% 
-  pull(Subject_ID)
-
-Redcap_PDCEN <- read.csv("//r04.med.va.gov/v03/EAS/Research/WRIISC/Databases/Pulmonary/PDCEN/Downloads/PDCEN_Database_files/PDCEN_REDCAP_8_22_24.csv")
-Redcap_PDCEN <- Redcap_PDCEN %>% 
-  filter(Subject_ID %in% IDS) %>% 
-  select(
-    Subject_ID, 
-    race_redcap = race, 
-    ethncity_redcap = ethncity, 
-    ethnic_gli
-  )
 
 
 # Access_CPET is the base file used to create everything 
 
-# Setting up equations ----------------------------------------------------
-
-
+## Setting up Equations ----------------------------------------------------
 
 # Getting all equations for all ODC subjects
-# Same process as above and then making the same plots
 
 # Setting up 2 different data sets
 # 1) Uncorrected = all normal, did not calculate if wrong mode is used. 
@@ -630,7 +736,8 @@ Access_Percent_predicted_tidy_Corrected$gender <- factor(Access_Percent_predicte
 
 
 # Corrected Dataset (x1.11 or x.89) ---------------------------------------------------------
-#### Plots based on corrected dataset --------------------------------------------------------
+# what was used primairly for anayalsis
+# Plots based on corrected dataset --------------------------------------------------------
 
 # plots to look at difference in percent predicted and predicted VO2
 # Using the Corrected dataset below
@@ -712,15 +819,19 @@ Access_Percent_predicted_tidy_Corrected %>%
   #      path = "R:/AirHazardsCenter/AHBPCE-PDCEN_site data/Working Analyses/CPET Equations/Plots" )
 
 
-#agreement plots----------------------------
+# Agreement plots----------------------------
 
 # Making a plot dataset for these plots to make it easier to deal with
 
 AgreementPlots <- AccessCPET_Corrected %>% 
   select(
+    Subject_ID,
+    Status,
     Sex = gender,
     bmi,
     BMI_cat,
+    "AI_FvW", "AI_FvH","AI_FvB" , "AI_FvJ",  "AI_FvN",  "AI_WvH", "AI_WvB", "AI_WvJ", 
+    "AI_WvN", "AI_HvB", "AI_HvJ" , "AI_HvN" ,"AI_BvJ", "AI_BvN","AI_JvN",
     Wasserman_Percent.Predicted,
     FRIEND_Percent.Predicted,
     Hansen_Percent.Predicted,
@@ -770,7 +881,21 @@ Agreement_shape <- c("Male, BM" = "#B9741F", "Male, BMI 2" = "#213958", "Male, B
 # FRIEND to Wasserman
 table(Access_Interpertation_wide_Corrected$FRIEND, Access_Interpertation_wide_Corrected$Wasserman)
 
+#setting up cut-off for AI
+# looking at values above 75%
+quantile(AgreementPlots$AI_FvW)
+
+AgreementPlots <- AgreementPlots %>% 
+  mutate(FvW_HighAI = factor(case_when(
+    AI_FvW >= 17.30498148 ~ "Higher Index",
+    TRUE ~ "Lower Index"
+  )))
+
+levels(AgreementPlots$FvW_HighAI)
+AgreementPlots$FvW_HighAI <- factor(AgreementPlots$FvW_HighAI,
+                                       levels = c("Lower Index", "Higher Index"))
   
+
 F_vs_W <- 
 AgreementPlots %>%  
   ggplot() +
@@ -781,21 +906,23 @@ AgreementPlots %>%
   geom_rect(aes(xmin = 80, xmax = 160, ymin = 0, ymax = 80), fill = "lightgrey", alpha = 0.02) +
   geom_rect(aes(xmin = 0, xmax = 80, ymin = 80, ymax = 160), fill = "lightgrey", alpha = 0.02) +
   
-  geom_point(aes(x = Wasserman_Percent.Predicted, y = FRIEND_Percent.Predicted, color = BMI_cat, shape = Sex)) +
+  #data
+  geom_point(aes(x = Wasserman_Percent.Predicted, y = FRIEND_Percent.Predicted)) +
   
   #adding labs
-  labs(y = "% Predicted: FRIEND", x = "% Predicted: Wasserman", color = "BMI", shape = "Sex") +    
+  labs(y = "% Predicted: FRIEND", x = "% Predicted: Wasserman") +    
   geom_text(label = "Reclassified", x = 20, y = 150, color = "black", size = 4.5, alpha = 0.02, family = "serif") +
   geom_text(label = "Reclassified", x = 140, y = 10, color = "black", size = 4.5, alpha = 0.02, family = "serif") +
   geom_text(label = "Line of Identity", x= 5, y = 5, angle = 45, hjust = 0, vjust = -0.5, size = 4.5, alpha = 0.02, family = "serif") +
   # geom_text(label = "0 -> 0", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
   # geom_text(label = "1 -> 1", x = 40, y = 25, color = "black", size = 4.5, alpha = 0.02) +
   
-  #color and legends
-  scale_color_manual(values = Agreement_colors) +
-  scale_fill_manual(values = Agreement_colors) +
-  guides(color = guide_legend(override.aes = list(shape = 22, fill = c("#B9741F", "#213958", "#990006")))) +
+  # #color and legends
+  # scale_color_manual(values = Agreement_colors) +
+  # scale_fill_manual(values = Agreement_colors) +
+  # guides(color = guide_legend(override.aes = list(shape = 22, fill = c("#B9741F", "#213958", "#990006")))) +
   #scale_shape_manual(values = c(16,17,16,17,16,17)) +
+  scale_color_lancet() +
   coord_equal(xlim = c(0,160), ylim = c(0,160) ) +
   scale_x_continuous(breaks = seq(0,160,by = 20)) +
   scale_y_continuous(breaks = seq(0,160,by = 20)) +
@@ -804,7 +931,7 @@ AgreementPlots %>%
   theme(
     axis.title = element_text(size = 16),
     legend.text = element_text(size = 14),
-    legend.title = element_text(size = 14),
+    legend.title = element_blank(),
     axis.text = element_text(size = 14),
     text = element_text(family = "serif"))
 
@@ -2365,7 +2492,7 @@ Violin_Percent <- Access_Percent_predicted_tidy_Corrected %>%
 
 
 
-#Figure 2 trying to look at them seperatly and grouping on word myself
+#Figure 2 trying to look at them separately and grouping on word myself
 emptyplot <- 
 AgreementPlots %>%  
   ggplot(color = "white") +
@@ -3433,391 +3560,6 @@ Classifications_Bike %>%
 
 
 
-##-------------------------------------------------------------------------------
-# AUC Dataset -------------------------------------------------------------
-
-
-#bringing in all SOB questions
-Clincal_Demos <- read_csv("Clincal_Demos_2024-03-01.csv")
-PDCEN_REDCAP <- read_csv("PDCEN_REDCAP.csv")
-
-Clincal_Demos <- Clincal_Demos %>% 
-  select(
-    Subject_ID = WRIISCID,
-    phq_sob
-  )
-
-Clincal_Demos <- Clincal_Demos %>% filter(!(duplicated(Subject_ID))) 
-
-PDCEN_REDCAP <- PDCEN_REDCAP %>% 
-  select(
-    Subject_ID,
-    phq_sob 
-  )
-
-PDCEN_REDCAP <- PDCEN_REDCAP %>% filter(!(duplicated(PDCEN_REDCAP))) 
-
-
-AWARE_REDCAP <- 
-  redcap_read_oneshot(
-    redcap_uri = "https://varedcap.rcp.vaec.va.gov/redcap/api/",
-    token = "7F2EF38183ED3B2F7ADA01A4A70248B3",
-    raw_or_label_headers = "raw",
-    fields = 'wriisc_id',
-    forms = 'section_13_phq15'
-  )
-
-AWARE_REDCAP <- as_tibble(AWARE_REDCAP$data)
-
-AWARE_REDCAP <- AWARE_REDCAP %>% 
-  select(
-    Subject_ID = wriisc_id,
-    phq_sob = phq_j
-  )
-
-AWARE_REDCAP <- AWARE_REDCAP %>% 
-  filter(!(duplicated(Subject_ID))) 
-
-
-Clincal_Demos <-
-  rows_patch(
-    Clincal_Demos,
-    PDCEN_REDCAP,
-    by = "Subject_ID",
-    unmatched = "ignore"
-  )
-
-
-Clincal_Demos <-
-  rows_patch(
-    Clincal_Demos,
-    AWARE_REDCAP,
-    by = "Subject_ID",
-    unmatched = "ignore"
-  )
-
-
-
-Clincal_Demos <- Clincal_Demos %>% 
-  filter(
-    Subject_ID %in% AccessCPET$Subject_ID
-  )
-
-AccessCPET <- 
-  merge(
-    AccessCPET,
-    Clincal_Demos,
-    by = "Subject_ID",
-    all.x = TRUE
-  )
-
-AccessCPET <- AccessCPET %>% 
-  replace_with_na_all(~.x %in% c(-999, "NA", "missing", 999)) 
-
-AccessCPET$phq_sob <- factor(AccessCPET$phq_sob)
-# 0 = not bothered
-# 1 = Bothered a little
-# 2 = Bothered a lot
-
-
-AccessCPET %>% 
-  select(phq_sob) %>% 
-  tbl_summary(    
-    statistic = list(
-      all_continuous() ~ "{mean} ({sd})",
-      all_categorical() ~ "{n} / {N} ({p}%)"),
-    digits = all_continuous() ~ 2,) %>% 
-  add_n()
-
-
-
-# New Equation ------------------------------------------------------------
-
-#   
-# 
-# #making new dataset to make this easier to deal with
-# 
-# New_Equation <- AccessCPET %>% 
-#   select(
-#     Subject_ID,
-#     Mode,
-#     age,
-#     gender,
-#     weight_kg,
-#     height_cm,
-#     bmi,
-#     VO2_peak.actual
-#   )
-# 
-# 
-# New_Equation_Bike <- New_Equation %>% 
-#   filter(
-#     Mode == "Bike")
-# 
-# New_Equation_Tread <- New_Equation %>% 
-#   filter(
-#     Mode == "Treadmill")
-# 
-# 
-# 
-# # `Making Equation: Multivariate: weight/height
-# 
-# # all
-# Multivariate_weight_height <- 
-#   lm(data = New_Equation, VO2_peak.actual ~ age + gender + Mode + height_cm + weight_kg)
-# 
-# summary(Multivariate_weight_height)
-# parameters(Multivariate_weight_height)
-# check_model(Multivariate_weight_height)
-# model_performance(Multivariate_weight_height)
-# 
-# 
-# 
-# plot(parameters(Multivariate_weight_height))
-# estimate_prediction(Multivariate_weight_height)
-# 
-# 
-# # Just Bike
-# Multivariate_weight_height.Bike <- 
-#   lm(data = New_Equation_Bike, VO2_peak.actual ~ age + gender + height_cm + weight_kg)
-# 
-# summary(Multivariate_weight_height.Bike)
-# parameters(Multivariate_weight_height.Bike)
-# check_model(Multivariate_weight_height.Bike)
-# model_performance(Multivariate_weight_height.Bike)
-# 
-# 
-# 
-# plot(parameters(Multivariate_weight_height.Bike))
-# estimate_prediction(Multivariate_weight_height.Bike)
-# 
-# 
-# # Just Tread
-# Multivariate_weight_height.Tread <- 
-#   lm(data = New_Equation_Tread, VO2_peak.actual ~ age + gender + height_cm + weight_kg)
-# 
-# summary(Multivariate_weight_height.Tread)
-# parameters(Multivariate_weight_height.Tread)
-# check_model(Multivariate_weight_height.Tread)
-# model_performance(Multivariate_weight_height.Tread)
-# 
-# 
-# 
-# 
-# # Case Example ------------------------------------------------------------
-# 
-# # selecting veterans to do a case review
-# 
-# #FRIEND to wasserman
-# 
-# # vets who went from normal to abnormal 
-# # only selecting PDCEN folks
-# 
-# 
-# # Pulling in all Redcap Data ---------------------------------------------------
-# 
-# PDCEN_REDCAP <- 
-#   redcap_read_oneshot(
-#     redcap_uri = "https://varedcap.rcp.vaec.va.gov/redcap/api/",
-#     token = "32D4DD3A904549F2A755EDFFB19A53A9",
-#     raw_or_label_headers = "raw",
-#     events = "initial_contact_arm_1"
-#   )
-# 
-# PDCEN_REDCAP <-  PDCEN_REDCAP$data
-# PDCEN_REDCAP <- as_tibble(PDCEN_REDCAP)
-# PDCEN_REDCAP <- clean_names(PDCEN_REDCAP)
-# 
-# 
-# #write.csv(colnames(PDCEN_REDCAP), "Variables.csv")
-# 
-# 
-# #coding back in race
-# PDCEN_REDCAP <- PDCEN_REDCAP %>% 
-#   mutate(
-#     race = case_when(
-#       demo_race_0 == 1 ~ "Native American",
-#       demo_race_1 == 1 ~ "Asian",
-#       demo_race_2 == 1 ~ "Black",
-#       demo_race_3 == 1 ~ "Pacific Islander",
-#       demo_race_4 == 1 ~ "White",
-#       demo_race_5 == 1 ~ "Unknown",
-#       demo_race_6 == 1 ~ "Other",
-#       demo_race_0 == 0 & demo_race_1 == 0 & demo_race_2 == 0 & demo_race_3 == 0 & demo_race_4 == 0 & demo_race_5 == 0 & demo_race_6 == 0 ~ "Other",
-#       TRUE ~ "NA"
-#     )
-#   )
-# 
-# 
-# PDCEN_REDCAP <- PDCEN_REDCAP %>%  
-#   mutate(pdcen_site = case_when(
-#     pdcen_site == 1 ~ "Ann Arbor",
-#     pdcen_site == 2 ~ "Baltimore",
-#     pdcen_site == 3 ~ "Colorado",
-#     pdcen_site == 4 ~ "Nashville",
-#     pdcen_site == 5 ~ "New Jersey",
-#     pdcen_site == 6 ~ "San Francisco",
-#     pdcen_site == 7 ~ "Other",
-#     TRUE ~ "None"
-#   ))
-# 
-# 
-# 
-# PDCEN_REDCAP$pdcen_site <- factor(PDCEN_REDCAP$pdcen_site,
-#                                   levels = c("Ann Arbor", "Baltimore", "Colorado", "Nashville", "New Jersey", "San Francisco", "Other", "None"))
-# 
-# 
-# PDCEN_REDCAP <- PDCEN_REDCAP %>%  replace_with_na_all(~.x %in% c(-999, "NA", "missing")) 
-# 
-# 
-# #  DEMO  -------------------------------------------------------
-# 
-# REDCAP_DEMO <- PDCEN_REDCAP %>%  
-#   mutate(
-#     Redcap_1 = "DEMO"
-#   ) %>%  
-#   select(
-#     Redcap_1,
-#     wriisc_id,
-#     pdcen_site,
-#     last_name,
-#     first_name,
-#     race,
-#     pdcen_site,
-#     ethnic_gli,
-#     demo_age,
-#     demo_gender,
-#     mmrc_dyspnea
-#   ) %>%  
-#   rename(
-#     Subject_ID = wriisc_id,
-#     age = demo_age,
-#     gender = demo_gender
-#   )  %>% 
-#   mutate(
-#     mmrc_dyspnea = case_when(
-#       mmrc_dyspnea == 1 ~ 0,
-#       mmrc_dyspnea == 2 ~ 1,
-#       mmrc_dyspnea == 3 ~ 2,
-#       mmrc_dyspnea == 4 ~ 3,
-#       mmrc_dyspnea == 5 ~ 4,
-#       TRUE ~ NA_real_
-#     ),
-#     Redcap_5 = "Respiratory"
-#   ) %>% 
-#   select(
-#     Redcap_5, everything()
-#   ) %>% 
-#   filter(!is.na(Subject_ID)) 
-# 
-# 
-# 
-# #getting and ID list
-# PDCEN_IDS <-
-#   REDCAP_DEMO$Subject_ID
-# 
-# PDCEN_IDS <- PDCEN_IDS[!(PDCEN_IDS %in% c("**TEST**", "***test2.0***"))]
-# 
-# 
-# FriendvsWasserman_Normal <-  Classifications %>% 
-#   filter(Subject_ID %in% PDCEN_IDS & FvW == 1)
-# 
-# FriendvsWasserman_Reduced <-  Classifications %>% 
-#   filter(Subject_ID %in% PDCEN_IDS & FvW == -1)
-# 
-# #
-# # IDs that need chart review:
-# 
-#   #Reduced to normal: 37751 38053 38280 38344
-#   #Reduced to abnormal: 37331 37389 37462 37529 37584 37607 37657 37676 37842 37918 38168 38229 38244
-# 
-# 
-# 
-
-
-#getting Race information
-
-AccessCPET <- 
-  merge(
-    AccessCPET,
-    Redcap_PDCEN[,c("Subject_ID", "race_redcap" )],
-    by = "Subject_ID",
-    all.x = TRUE
-  )
-
-Pre_Demo <- read.csv("Clincal_Demo.csv")
-
-Pre_Demo <- Pre_Demo %>% 
-  rename(
-    Subject_ID = WRIISCID
-  )
-
-AccessCPET <- 
-  merge(
-    AccessCPET,
-    Pre_Demo[,c("Subject_ID", "race_ethnicity" )],
-    by = "Subject_ID",
-    all.x = TRUE
-  )
-
-
-AccessCPET <- AccessCPET %>% 
-  mutate(
-    Race_Combined = case_when(
-      is.na(race_redcap) ~ race_ethnicity,
-      TRUE ~ race_redcap
-    )
-  )
-
-
-AccessCPET <- AccessCPET %>% 
-  mutate(
-    Race_Combined = case_when(
-      is.na(Race_Combined) ~ race,
-      TRUE~ Race_Combined))
-
-AccessCPET <- AccessCPET %>% 
-  mutate(
-    Race_Combined = case_when(
-      Race_Combined == "White" ~ "Caucasian",
-      Race_Combined == "African-American" ~ "Black",
-      Race_Combined == "Black or African-American" ~ "Black",
-      Race_Combined == "American Indian or Alaskan tive" ~ "Native American",
-      Race_Combined == "Mixed" ~ "Other",
-      TRUE ~Race_Combined))
-
-
-AccessCPET %>% 
-  select(
-    race,
-    Race_Combined
-  ) %>% 
-  tbl_summary()
-
-AccessCPET <- 
-  merge(
-    AccessCPET,
-    AccessCPET_Corrected[,c("Subject_ID", "Status")],
-    by = "Subject_ID"
-  )
-
-AccessCPET %>% 
-  select(
-    age,
-    gender,
-    bmi,
-    weight_kg,
-    height_cm,
-    Mode,
-    VO2_peak.actual,
-    race,
-    Race_Combined,
-    Status
-  ) %>% 
-  tbl_summary(
-    by = "Status"
-  )
-
 
 #######TABELS
 
@@ -3870,3 +3612,261 @@ Access_Corrected_Tidy_FORanalaysis %>%
     digits = all_continuous() ~ 2
   ) 
 
+
+
+############# Arjomadni Index ###################
+
+#looking at the magnitiude of the change between equations http://127.0.0.1:19633/graphics/plot_zoom_png?width=1200&height=900
+
+
+# bringing in new race informaiton
+
+
+AccessCPET_Corrected <- 
+  merge(
+    AccessCPET_Corrected,
+    AccessCPET[,c("Subject_ID", "Race_Combined")],
+    by = "Subject_ID"
+  )
+
+
+AccessCPET_Corrected <- AccessCPET_Corrected %>% 
+  mutate(
+    AI_FvW = abs(FRIEND_Percent.Predicted - Wasserman_Percent.Predicted),
+    AI_FvH = abs(FRIEND_Percent.Predicted - Hansen_Percent.Predicted),
+    AI_FvB = abs(FRIEND_Percent.Predicted - Bruce_Percent.Predicted),
+    AI_FvJ = abs(FRIEND_Percent.Predicted - Jones_Percent.Predicted),
+    AI_FvN = abs(FRIEND_Percent.Predicted - Neder_Percent.Predicted),
+    
+    AI_WvH = abs(Wasserman_Percent.Predicted - Hansen_Percent.Predicted),
+    AI_WvB = abs(Wasserman_Percent.Predicted - Bruce_Percent.Predicted),
+    AI_WvJ = abs(Wasserman_Percent.Predicted - Jones_Percent.Predicted),
+    AI_WvN = abs(Wasserman_Percent.Predicted - Neder_Percent.Predicted),
+    
+    AI_HvB = abs(Hansen_Percent.Predicted - Bruce_Percent.Predicted),
+    AI_HvJ = abs(Hansen_Percent.Predicted - Jones_Percent.Predicted),
+    AI_HvN = abs(Hansen_Percent.Predicted - Neder_Percent.Predicted),
+    
+    AI_BvJ = abs(Bruce_Percent.Predicted - Jones_Percent.Predicted),
+    AI_BvN = abs(Bruce_Percent.Predicted - Neder_Percent.Predicted),
+    
+    AI_JvN = abs(Jones_Percent.Predicted - Neder_Percent.Predicted)
+      )
+
+AccessCPET_Corrected %>% 
+  select(
+    "AI_FvW", "AI_FvH","AI_FvB" , "AI_FvJ",  "AI_FvN",  "AI_WvH", "AI_WvB", "AI_WvJ", "AI_WvN", "AI_HvB", "AI_HvJ" , "AI_HvN" ,"AI_BvJ", "AI_BvN","AI_JvN") %>% 
+tbl_summary(
+  digits = all_continuous() ~ 2
+) 
+
+AI_Analysis <- AccessCPET_Corrected %>% 
+  select(
+    Subject_ID,
+    Mode,
+    gender,
+    age,
+    bmi,
+    BMI_Grouping,
+    Age_Grouping,
+    Race_Combined,
+    "AI_FvW", "AI_FvH","AI_FvB" , "AI_FvJ",  "AI_FvN",  "AI_WvH", "AI_WvB", "AI_WvJ", 
+    "AI_WvN", "AI_HvB", "AI_HvJ" , "AI_HvN" ,"AI_BvJ", "AI_BvN","AI_JvN") 
+
+
+
+# Making a long version
+
+AI_Analysis_long <- AI_Analysis %>% 
+  pivot_longer(
+    cols = c(    "AI_FvW", "AI_FvH","AI_FvB" , "AI_FvJ",  "AI_FvN",  "AI_WvH", "AI_WvB", "AI_WvJ", 
+                 "AI_WvN", "AI_HvB", "AI_HvJ" , "AI_HvN" ,"AI_BvJ", "AI_BvN","AI_JvN"),
+    names_to = c(".value", "Pair"),
+    names_sep = "_"
+  )
+
+
+
+
+AI_Analysis_long$Pair <- factor(AI_Analysis_long$Pair)
+AI_Analysis_long$Race_Combined <- factor(AI_Analysis_long$Race_Combined)
+
+AI_Analysis_long %>% 
+  ggplot() +
+  geom_histogram(aes(x = AI))
+
+AI_Analysis_long %>% 
+  ggplot(aes(x = BMI_Grouping, y = AI, color= Pair)) +
+  geom_jitter() + 
+  geom_smooth(method = "lm") +
+  facet_wrap(~Pair)
+
+AI_Analysis_long %>% 
+  ggplot(aes(x = AI, y = age, color= Pair)) +
+  geom_jitter() + 
+  geom_smooth(method = "lm") +
+  facet_wrap(~Pair)
+
+AI_Analysis_long %>% 
+  ggplot(aes(x = AI, y = gender, color= Pair)) +
+  geom_jitter() + 
+  geom_smooth(method = "lm") +
+  facet_wrap(~Pair)
+
+AI_Analysis_long %>% 
+  ggplot(aes(x = AI, y = race, color= Pair)) +
+  geom_jitter() + 
+  geom_smooth(method = "lm") +
+  facet_wrap(~Pair)
+
+AI_Analysis_long %>% 
+  ggplot(aes(x = AI, y = Mode, color= Pair)) +
+  geom_jitter() + 
+  facet_wrap(~Pair)
+
+levels(AI_Analysis_long$Race_Combined)
+
+AI_Analysis_long$Race_Combined <- factor(AI_Analysis_long$Race_Combined,
+                                levels = c("Caucasian", "Black", "Mexican-American", "Other", "Asian" ))
+
+F_W_model_1 <- lm(AI_FvW ~ Mode + gender +  bmi + age + Race_Combined, data = AI_Analysis)
+F_W_model_2 <- glm(AI_FvW ~ Mode + gender +  bmi + age + Race_Combined, data = AI_Analysis, family = Gamma(link = "log"))
+
+check_model(F_W_model_1)
+check_model(F_W_model_2)
+
+parameters(F_W_model_1)
+parameters(F_W_model_2)
+
+# Get unique pairs
+pairs <- unique(AI_Analysis_long$Pair)
+
+# Initialize a list to store model summaries
+model_summaries <- list()
+
+# fixing the levels in BMI and age to have have 25-75 be the reference 
+AI_Analysis_long$BMI_Grouping <- relevel(AI_Analysis_long$BMI_Grouping, ref = "BMI: 25-75%") 
+AI_Analysis_long$Age_Grouping <- relevel(AI_Analysis_long$Age_Grouping, ref = "Age: 25-75%") 
+
+
+
+# Loop through each pair, filter the data, run the model, and store the summary
+for (pair in pairs) {
+  # Filter data for the current pair
+  pair_data <- filter(AI_Analysis_long, Pair == pair)
+  
+  # Run the regression model
+  model <- lm(AI ~ Mode + gender +  bmi + age + Race_Combined, data = pair_data)
+  
+  
+
+  # Store the summary
+  model_summaries[[pair]] <- summary(model)
+  
+  # Show the check_model plot for the current model
+  plot <- check_model(model)
+  print(plot)
+}
+
+# Print all model summaries
+model_summaries
+
+
+
+
+########################
+results_df <- data.frame()
+
+# Get unique pairs
+pairs <- unique(AI_Analysis_long$Pair)
+
+# Loop through each pair
+for(current_pair in pairs) {
+  # Subset data for current pair
+  pair_data <- subset(AI_Analysis_long, Pair == current_pair)
+  
+  # Fit the model
+  model <- lm(AI ~ Mode + gender +  bmi + age + Race_Combined, data = pair_data)
+  
+  #check model
+  check_model(model)
+  
+  # Get model summary
+  model_summary <- summary(model)
+  
+  # Extract coefficients and p-values
+  coef_data <- data.frame(
+    Pair = current_pair,
+    Term = rownames(model_summary$coefficients),
+    Estimate = model_summary$coefficients[,1],
+    Std_Error = model_summary$coefficients[,2],
+    t_value = model_summary$coefficients[,3],
+    p_value = model_summary$coefficients[,4]
+  )
+  
+  # Add model fit statistics
+  coef_data$R_squared <- model_summary$r.squared
+  coef_data$Adj_R_squared <- model_summary$adj.r.squared
+  coef_data$F_statistic <- model_summary$fstatistic[1]
+  coef_data$F_p_value <- pf(model_summary$fstatistic[1], 
+                            model_summary$fstatistic[2], 
+                            model_summary$fstatistic[3], 
+                            lower.tail = FALSE)
+  
+  # Append to results dataframe
+  results_df <- rbind(results_df, coef_data)
+}
+
+
+
+# Round numeric columns to 4 decimal places
+results_df <- results_df %>%
+  mutate(across(where(is.numeric), ~round(., 4)))
+
+# Print the results
+print(results_df)
+
+results_df <- results_df %>% 
+  filter(Term != "(Intercept)")
+
+results_df_2 <- results_df %>% 
+  select(
+    Pair,
+    p_value,
+    Term,
+    Estimate
+  ) %>% 
+  pivot_wider(
+    names_from = Term,
+    values_from = c(Estimate, p_value)
+  )
+
+results_df_2 <- results_df_2 %>% 
+  select(
+    Pair,
+    Estimate_age,
+    Estimate_bmi,
+    Estimate_gender2,
+    Estimate_ModeTreadmill,
+    Estimate_Race_CombinedBlack,
+    "Estimate_Race_CombinedMexican-American",
+    Estimate_Race_CombinedAsian,
+    Estimate_Race_CombinedOther,
+    p_value_age,
+    p_value_bmi,
+    p_value_gender2,
+    p_value_ModeTreadmill,
+    p_value_Race_CombinedBlack,
+    "p_value_Race_CombinedMexican-American",
+    p_value_Race_CombinedAsian,
+    p_value_Race_CombinedOther
+  )
+
+# Save results to CSV
+write.csv(results_df_2, "model_summary_results.csv", row.names = FALSE)
+
+
+results_df %>% 
+  filter(p_value < 0.05) %>% 
+  group_by(Term) %>% 
+  summarise(count = n(), avg = mean(Estimate))
