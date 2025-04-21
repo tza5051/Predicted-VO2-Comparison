@@ -66,8 +66,8 @@ library(NatParksPalettes)
 #data is from both pre and post PDCEN
 # all data from CPET ODC file
 
-AccessCPET <- read_excel("R:/WRIISC/Databases/Pulmonary/PDCEN/Downloads/CPET_ODC_7_1_24.xlsx")
-AccessCPET <- clean_names(AccessCPET)
+AccessCPET <- read_excel("R:/WRIISC/Databases/Pulmonary/PDCEN/Downloads/OLD/CPET_ODC_7_1_24.xlsx")
+AccessCPET <- janitor::clean_names(AccessCPET)
 
 # selecting the variables needed for analaysis
 AccessCPET <- AccessCPET %>% 
@@ -79,7 +79,12 @@ AccessCPET <- AccessCPET %>%
     treadmill	,
     exercise	,
     eperf_peakvo2	,
-    eperf_vo2kg_peak) %>% 
+    eperf_vo2kg_peak,
+    fperf_peakhr,
+    fperf_peakhr_perc,
+    eperf_vco2_peak,
+    fperf_rer,
+    resp_ve) %>% 
   rename(
     Y_N_cycle	=	cycle	,
     Y_N_tredmill	=	treadmill	,
@@ -92,10 +97,11 @@ Access_IDS <- AccessCPET$wriiscid
 
 # Code below brings in data from pre pdcen and data from redcap fro pdcen to get race combined
 
-AccessPatient2023 <-  read_excel("R:/WRIISC/Databases/Pulmonary/PDCEN/Downloads/Patient_ODC_7_1_24.xlsx")
+#note 3/6/25- needed to repull data to get ethnicity. 
+AccessPatient2023 <-  read_excel("R:/WRIISC/Databases/Pulmonary/PDCEN/Downloads/Patient_ODC_12_2_24.xlsx")
 AccessPatient2023 <- clean_names(AccessPatient2023)
 
-AccessPFT2023 <-  read_excel("R:/WRIISC/Databases/Pulmonary/PDCEN/Downloads/Pulmonary_ODC_7_1_24.xlsx")
+AccessPFT2023 <-  read_excel("R:/WRIISC/Databases/Pulmonary/PDCEN/Downloads/OLD/Pulmonary_ODC_7_1_24.xlsx")
 AccessPFT2023 <- clean_names(AccessPFT2023)
 
 
@@ -148,10 +154,7 @@ AccessCPET <- AccessCPET %>%
 
 
 
-IDS <- AccessCPET %>% 
-  pull(Subject_ID)
-
-Redcap_PDCEN <- read.csv("//r04.med.va.gov/v03/EAS/Research/WRIISC/Databases/Pulmonary/PDCEN/Downloads/PDCEN_Database_files/PDCEN_REDCAP_8_22_24.csv")
+Redcap_PDCEN <- read.csv("//r04.med.va.gov/v03/EAS/Research/WRIISC/Databases/Pulmonary/PDCEN/Downloads/PDCEN_Database_files/OLD/PDCEN_REDCAP_8_22_24.csv")
 Redcap_PDCEN <- Redcap_PDCEN %>% 
   filter(Subject_ID %in% IDS) %>% 
   select(
@@ -166,7 +169,7 @@ Redcap_PDCEN <- Redcap_PDCEN %>%
 AccessCPET <- 
   merge(
     AccessCPET,
-    Redcap_PDCEN[,c("Subject_ID", "race_redcap" )],
+    Redcap_PDCEN[,c("Subject_ID", "race_redcap", "ethncity_redcap")],
     by = "Subject_ID",
     all.x = TRUE
   )
@@ -216,8 +219,11 @@ AccessCPET <- AccessCPET %>%
       Race_Combined == "Mixed" ~ "Other",
       Race_Combined == "Pacific Islander" ~ "Other",
       Race_Combined == "Native American" ~ "Other",
+      Race_Combined == "Mexican-American" ~ "Other",
       TRUE ~Race_Combined))
 
+
+#fix
 
 AccessCPET %>% 
   select(
@@ -235,29 +241,23 @@ AccessCPET %>%
   ) %>% 
   tbl_summary()
 
-AccessCPET <- 
-  merge(
-    AccessCPET,
-    AccessCPET_Corrected[,c("Subject_ID", "Status")],
-    by = "Subject_ID"
-  )
 
-AccessCPET %>% 
-  select(
-    age,
-    gender,
-    bmi,
-    weight_kg,
-    height_cm,
-    Mode,
-    VO2_peak.actual,
-    race,
-    Race_Combined,
-    Status
-  ) %>% 
-  tbl_summary(
-    
-  )
+# AccessCPET %>% 
+#   select(
+#     age,
+#     gender,
+#     bmi,
+#     weight_kg,
+#     height_cm,
+#     Mode,
+#     VO2_peak.actual,
+#     race,
+#     Race_Combined,
+#     Status
+#   ) %>% 
+#   tbl_summary(
+#     
+#   )
 
 
 # Setting Up dataset for predicted equations
@@ -302,10 +302,14 @@ AccessCPET <- AccessCPET %>%
   mutate(
     weight_kg = weight_lbs * 0.4546,
     height_cm = height_in * 2.54,
-    bmi = (weight_lbs/(height_in * height_in) * 703),
-    gender = factor(case_when(
-      gender == 0 ~ 2,
-      TRUE ~ gender
+    bmi = (weight_lbs/(height_in * height_in) * 703))
+    
+AccessCPET <- AccessCPET %>% 
+  mutate(
+gender = factor(case_when(
+      gender == "Male" ~ "1",
+      gender == "Female" ~ "2",
+      TRUE ~ NA_character_
     ))
   )
 
@@ -374,8 +378,11 @@ AccessCPET <- AccessCPET %>%
     bmi > 8)
 
 
-#final = 305 so far
 
+
+#final = 305 so far
+IDS <- AccessCPET %>% 
+  pull(Subject_ID)
 
 #assessing subjects based on age and bmi
 
@@ -430,8 +437,8 @@ AccessCPET_Uncorrected <- AccessCPET %>%
           TRUE ~ NA_real_),
         
         Wasserman_Predicted = case_when(
-          gender == 1 & Mode == "Bike" ~ (weight_kg * (50.72 - (0.372 * age))), 
-          gender == 2 & Mode == "Bike" ~ (weight_kg + 42.8) * (22.78 - (0.17 * age)),
+          gender == 1  ~ (weight_kg * (50.72 - (0.372 * age))), 
+          gender == 2  ~ (weight_kg + 42.8) * (22.78 - (0.17 * age)),
           TRUE ~ NA_real_),
         
         Hansen_Predicted = case_when(
@@ -439,34 +446,34 @@ AccessCPET_Uncorrected <- AccessCPET %>%
           gender == 1 & Mode == "Bike" & weight_kg == weight_ideal ~ (weight_kg * cycle_factor),
           gender == 1 & Mode == "Bike" & weight_kg > weight_ideal ~ ((weight_ideal * cycle_factor) + 6 * (weight_kg - weight_ideal)),
           
-          # gender == 1 & Mode == "Treadmill" & weight_kg < weight_ideal ~ (((weight_ideal + weight_kg) / 2) * cycle_factor) * 1.11,
-          # gender == 1 & Mode == "Treadmill" & weight_kg == weight_ideal ~ (weight_kg * cycle_factor) * 1.11,
-          # gender == 1 & Mode == "Treadmill" & weight_kg > weight_ideal ~ ((weight_ideal * cycle_factor) + 6 * (weight_kg - weight_ideal)) * 1.11,
-          # 
+          gender == 1 & Mode == "Treadmill" & weight_kg < weight_ideal ~ (((weight_ideal + weight_kg) / 2) * cycle_factor) * 1.11,
+          gender == 1 & Mode == "Treadmill" & weight_kg == weight_ideal ~ (weight_kg * cycle_factor) * 1.11,
+          gender == 1 & Mode == "Treadmill" & weight_kg > weight_ideal ~ ((weight_ideal * cycle_factor) + 6 * (weight_kg - weight_ideal)) * 1.11,
+
           gender == 2 & Mode == "Bike" & weight_kg < weight_ideal ~ (((weight_ideal + weight_kg + 86) / 2) * cycle_factor),
           gender == 2 & Mode == "Bike" & weight_kg == weight_ideal ~ ((weight_kg + 43) * cycle_factor),
           gender == 2 & Mode == "Bike" & weight_kg > weight_ideal ~ (((weight_ideal + 43) * cycle_factor) + 6 * (weight_kg - weight_ideal)),
           
-          # gender == 2 & Mode == "Treadmill" & weight_kg < weight_ideal ~ (((weight_ideal + weight_kg + 86) / 2) * cycle_factor) * 1.11,
-          # gender == 2 & Mode == "Treadmill" & weight_kg == weight_ideal ~ ((weight_kg + 43) * cycle_factor) * 1.11,
-          # gender == 2 & Mode == "Treadmill" & weight_kg > weight_ideal ~ (((weight_ideal + 43) * cycle_factor) + 6 * (weight_kg - weight_ideal)) * 1.11,
-          # 
+          gender == 2 & Mode == "Treadmill" & weight_kg < weight_ideal ~ (((weight_ideal + weight_kg + 86) / 2) * cycle_factor) * 1.11,
+          gender == 2 & Mode == "Treadmill" & weight_kg == weight_ideal ~ ((weight_kg + 43) * cycle_factor) * 1.11,
+          gender == 2 & Mode == "Treadmill" & weight_kg > weight_ideal ~ (((weight_ideal + 43) * cycle_factor) + 6 * (weight_kg - weight_ideal)) * 1.11,
+
           TRUE ~ NA_real_),
         
         
         Bruce_Predicted = case_when(
-          gender == 1 & Mode == "Treadmill" ~ ((60 - (0.55* age)) * (weight_kg)), 
-          gender == 2 & Mode == "Treadmill" ~ ((48 - (0.37 * age)) * (weight_kg)),
+          gender == 1  ~ ((60 - (0.55* age)) * (weight_kg)), 
+          gender == 2  ~ ((48 - (0.37 * age)) * (weight_kg)),
           TRUE ~ NA_real_),
         
         Jones_Predicted = case_when(
-          gender == 1 & Mode == "Bike" ~ (-3.76 + 0.034 * height_cm + 0.022 * weight_kg - 0.028 * age) * 1000, 
-          gender == 2 & Mode == "Bike" ~ (-2.26 + 0.025 * height_cm + 0.01 * weight_kg - 0.018 * age) * 1000,
+          gender == 1  ~ (-3.76 + 0.034 * height_cm + 0.022 * weight_kg - 0.028 * age) * 1000, 
+          gender == 2  ~ (-2.26 + 0.025 * height_cm + 0.01 * weight_kg - 0.018 * age) * 1000,
           TRUE ~ NA_real_),
         
         Neder_Predicted = case_when(
-          gender == 1 & Mode == "Bike" ~ ((-24.3 * age) + (10.2 * weight_kg) + (8.3 * height_cm) + 1125), 
-          gender == 2 & Mode == "Bike" ~ ((-13.7 * age) + (10.2 * weight_kg) + (8.3 * height_cm) + 60),
+          gender == 1  ~ ((-24.3 * age) + (10.2 * weight_kg) + (8.3 * height_cm) + 1125), 
+          gender == 2  ~ ((-13.7 * age) + (10.2 * weight_kg) + (8.3 * height_cm) + 60),
           TRUE ~ NA_real_)
       )
 
@@ -537,7 +544,7 @@ Access_Percent_predicted_tidy_Uncorrected <- Access_Percent_predicted_tidy_Uncor
 Access_Percent_predicted_tidy_Uncorrected <- Access_Percent_predicted_tidy_Uncorrected %>%  
   mutate(
     Clinical_Interpretation = case_when(
-      Percent.Predicted < 80 ~ 1, #low VO2
+ 
       Percent.Predicted >= 80 ~ 0, #normal 
       TRUE ~ NA_real_
     )
@@ -703,13 +710,30 @@ Access_Percent_predicted_tidy_Corrected <- Access_Percent_predicted_tidy_Correct
       Percent.Predicted < 80 ~ 1, #low VO2
       Percent.Predicted >= 80 ~ 0, #normal 
       TRUE ~ NA_real_
+    ))
+
+
+
+Access_Percent_predicted_tidy_Corrected_85 <- Access_Percent_predicted_tidy_Corrected %>%  
+  select(-c(Clinical_Interpretation)) %>% 
+  mutate(
+    Clinical_Interpretation = case_when(
+      Percent.Predicted < 85 ~ 1, #low VO2
+      Percent.Predicted >= 85 ~ 0, #normal 
+      TRUE ~ NA_real_
     )
   )
 
 Access_Percent_predicted_tidy_Corrected$Clinical_Interpretation <- factor(Access_Percent_predicted_tidy_Corrected$Clinical_Interpretation)
-
+Access_Percent_predicted_tidy_Corrected_85$Clinical_Interpretation <- factor(Access_Percent_predicted_tidy_Corrected_85$Clinical_Interpretation)
 
 Access_Interpertation_wide_Corrected <- Access_Percent_predicted_tidy_Corrected %>% 
+  pivot_wider(id_cols = Subject_ID, 
+              names_from = Equation, 
+              values_from = Clinical_Interpretation)
+
+
+Access_Interpertation_wide_Corrected_85 <- Access_Percent_predicted_tidy_Corrected_85 %>% 
   pivot_wider(id_cols = Subject_ID, 
               names_from = Equation, 
               values_from = Clinical_Interpretation)
@@ -719,11 +743,25 @@ Access_Interpertation_wide_Corrected <- Access_Interpertation_wide_Corrected %>%
     -(Measured)
   )
 
+Access_Interpertation_wide_Corrected_85 <- Access_Interpertation_wide_Corrected_85 %>% 
+  select(
+    -(Measured)
+  )
+
+
 
 Access_Percent_predicted_tidy_Corrected <- 
   merge(
     AccessCPET_Corrected[,c("Subject_ID", "age", "gender", "bmi", "race")],
     Access_Percent_predicted_tidy_Corrected,
+    by = "Subject_ID"
+  )
+
+
+Access_Percent_predicted_tidy_Corrected_85 <- 
+  merge(
+    AccessCPET_Corrected[,c("Subject_ID", "age", "gender", "bmi", "race")],
+    Access_Percent_predicted_tidy_Corrected_85,
     by = "Subject_ID"
   )
 
@@ -734,6 +772,13 @@ Access_Percent_predicted_tidy_Corrected$Subject_ID <- factor(Access_Percent_pred
 Access_Percent_predicted_tidy_Corrected$race <- factor(Access_Percent_predicted_tidy_Corrected$race)
 Access_Percent_predicted_tidy_Corrected$gender <- factor(Access_Percent_predicted_tidy_Corrected$gender)
 
+
+Access_Percent_predicted_tidy_Corrected_85$Equation <- factor(Access_Percent_predicted_tidy_Corrected_85$Equation,
+                                                           levels =  c("Measured","Wasserman", "FRIEND","Hansen","Bruce","Jones", "Neder")) 
+
+Access_Percent_predicted_tidy_Corrected_85$Subject_ID <- factor(Access_Percent_predicted_tidy_Corrected_85$Subject_ID)
+Access_Percent_predicted_tidy_Corrected_85$race <- factor(Access_Percent_predicted_tidy_Corrected_85$race)
+Access_Percent_predicted_tidy_Corrected_85$gender <- factor(Access_Percent_predicted_tidy_Corrected_85$gender)
 
 # Corrected Dataset (x1.11 or x.89) ---------------------------------------------------------
 # what was used primairly for anayalsis
@@ -907,7 +952,7 @@ AgreementPlots %>%
   geom_rect(aes(xmin = 0, xmax = 80, ymin = 80, ymax = 160), fill = "lightgrey", alpha = 0.02) +
   
   #data
-  geom_point(aes(x = Wasserman_Percent.Predicted, y = FRIEND_Percent.Predicted)) +
+  geom_point(aes(x = Wasserman_Percent.Predicted, y = FRIEND_Percent.Predicted), color = "#00468Bff") +
   
   #adding labs
   labs(y = "% Predicted: FRIEND", x = "% Predicted: Wasserman") +    
@@ -922,7 +967,6 @@ AgreementPlots %>%
   # scale_fill_manual(values = Agreement_colors) +
   # guides(color = guide_legend(override.aes = list(shape = 22, fill = c("#B9741F", "#213958", "#990006")))) +
   #scale_shape_manual(values = c(16,17,16,17,16,17)) +
-  scale_color_lancet() +
   coord_equal(xlim = c(0,160), ylim = c(0,160) ) +
   scale_x_continuous(breaks = seq(0,160,by = 20)) +
   scale_y_continuous(breaks = seq(0,160,by = 20)) +
@@ -957,7 +1001,8 @@ F_vs_H <-
   geom_rect(aes(xmin = 80, xmax = 160, ymin = 0, ymax = 80), fill = "lightgrey", alpha = 0.02) +
   geom_rect(aes(xmin = 0, xmax = 80, ymin = 80, ymax = 160), fill = "lightgrey", alpha = 0.02) +
   
-  geom_point(aes(x = Hansen_Percent.Predicted, y = FRIEND_Percent.Predicted, color = BMI_cat, shape = Sex)) +
+  #data
+  geom_point(aes(x = Hansen_Percent.Predicted, y = FRIEND_Percent.Predicted), color = "#00468Bff") +
   
   #adding labs
   labs(y = "% Predicted: FRIEND", x = "% Predicted: Hansen", color = "BMI", shape = "Sex") +    
@@ -966,12 +1011,7 @@ F_vs_H <-
   geom_text(label = "Line of Identity", x= 5, y = 5, angle = 45, hjust = 0, vjust = -0.5, size = 4.5, alpha = 0.02, family = "serif") +
   # geom_text(label = "0 -> 0", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
   # geom_text(label = "1 -> 1", x = 40, y = 25, color = "black", size = 4.5, alpha = 0.02) +
-  
-  #color and legends
-  scale_color_manual(values = Agreement_colors) +
-  scale_fill_manual(values = Agreement_colors) +
-  guides(color = guide_legend(override.aes = list(shape = 22, fill = c("#B9741F", "#213958", "#990006")))) +
-  #scale_shape_manual(values = c(16,17,16,17,16,17)) +
+
   coord_equal(xlim = c(0,160), ylim = c(0,160) ) +
   scale_x_continuous(breaks = seq(0,160,by = 20)) +
   scale_y_continuous(breaks = seq(0,160,by = 20)) +
@@ -1003,7 +1043,8 @@ F_vs_B <-
   geom_rect(aes(xmin = 80, xmax = 160, ymin = 0, ymax = 80), fill = "lightgrey", alpha = 0.02) +
   geom_rect(aes(xmin = 0, xmax = 80, ymin = 80, ymax = 160), fill = "lightgrey", alpha = 0.02) +
   
-  geom_point(aes(x = Bruce_Percent.Predicted, y = FRIEND_Percent.Predicted, color = BMI_cat, shape = Sex)) +
+  #data
+  geom_point(aes(x = Bruce_Percent.Predicted, y = FRIEND_Percent.Predicted), color = "#00468Bff") +
   
   #adding labs
   labs(y = "% Predicted: FRIEND", x = "% Predicted: Bruce", color = "BMI", shape = "Sex") +    
@@ -1012,12 +1053,7 @@ F_vs_B <-
   geom_text(label = "Line of Identity", x= 5, y = 5, angle = 45, hjust = 0, vjust = -0.5, size = 4.5, alpha = 0.02, family = "serif") +
   # geom_text(label = "0 -> 0", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
   # geom_text(label = "1 -> 1", x = 40, y = 25, color = "black", size = 4.5, alpha = 0.02) +
-  
-  #color and legends
-  scale_color_manual(values = Agreement_colors) +
-  scale_fill_manual(values = Agreement_colors) +
-  guides(color = guide_legend(override.aes = list(shape = 22, fill = c("#B9741F", "#213958", "#990006")))) +
-  #scale_shape_manual(values = c(16,17,16,17,16,17)) +
+
   coord_equal(xlim = c(0,160), ylim = c(0,160) ) +
   scale_x_continuous(breaks = seq(0,160,by = 20)) +
   scale_y_continuous(breaks = seq(0,160,by = 20)) +
@@ -1050,7 +1086,7 @@ F_vs_J <-
   geom_rect(aes(xmin = 80, xmax = 160, ymin = 0, ymax = 80), fill = "lightgrey", alpha = 0.02) +
   geom_rect(aes(xmin = 0, xmax = 80, ymin = 80, ymax = 160), fill = "lightgrey", alpha = 0.02) +
   
-  geom_point(aes(x = Jones_Percent.Predicted, y = FRIEND_Percent.Predicted, color = BMI_cat, shape = Sex)) +
+  geom_point(aes(x = Jones_Percent.Predicted, y = FRIEND_Percent.Predicted), color = "#00468Bff") +
   
   #adding labs
   labs(y = "% Predicted: FRIEND", x = "% Predicted: Jones", color = "BMI", shape = "Sex") +    
@@ -1060,10 +1096,7 @@ F_vs_J <-
   # geom_text(label = "0 -> 0", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
   # geom_text(label = "1 -> 1", x = 40, y = 25, color = "black", size = 4.5, alpha = 0.02) +
   
-  #color and legends
-  scale_color_manual(values = Agreement_colors) +
-  scale_fill_manual(values = Agreement_colors) +
-  guides(color = guide_legend(override.aes = list(shape = 22, fill = c("#B9741F", "#213958", "#990006")))) +
+
   #scale_shape_manual(values = c(16,17,16,17,16,17)) +
   coord_equal(xlim = c(0,160), ylim = c(0,160) ) +
   scale_x_continuous(breaks = seq(0,160,by = 20)) +
@@ -1096,7 +1129,8 @@ F_vs_N <-
   geom_rect(aes(xmin = 80, xmax = 160, ymin = 0, ymax = 80), fill = "lightgrey", alpha = 0.02) +
   geom_rect(aes(xmin = 0, xmax = 80, ymin = 80, ymax = 160), fill = "lightgrey", alpha = 0.02) +
   
-  geom_point(aes(x = Wasserman_Percent.Predicted, y = FRIEND_Percent.Predicted, color = BMI_cat, shape = Sex)) +
+  #Data
+  geom_point(aes(x = Wasserman_Percent.Predicted, y = FRIEND_Percent.Predicted), color = "#00468Bff") +
   
   #adding labs
   labs(y = "% Predicted: FRIEND", x = "% Predicted: Neder", color = "BMI", shape = "Sex") +    
@@ -1106,10 +1140,6 @@ F_vs_N <-
   # geom_text(label = "0 -> 0", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
   # geom_text(label = "1 -> 1", x = 40, y = 25, color = "black", size = 4.5, alpha = 0.02) +
   
-  #color and legends
-  scale_color_manual(values = Agreement_colors) +
-  scale_fill_manual(values = Agreement_colors) +
-  guides(color = guide_legend(override.aes = list(shape = 22, fill = c("#B9741F", "#213958", "#990006")))) +
   #scale_shape_manual(values = c(16,17,16,17,16,17)) +
   coord_equal(xlim = c(0,160), ylim = c(0,160) ) +
   scale_x_continuous(breaks = seq(0,160,by = 20)) +
@@ -1142,7 +1172,8 @@ W_vs_H <-
   geom_rect(aes(xmin = 80, xmax = 160, ymin = 0, ymax = 80), fill = "lightgrey", alpha = 0.02) +
   geom_rect(aes(xmin = 0, xmax = 80, ymin = 80, ymax = 160), fill = "lightgrey", alpha = 0.02) +
   
-  geom_point(aes(x = Hansen_Percent.Predicted, y = Wasserman_Percent.Predicted, color = BMI_cat, shape = Sex)) +
+  #data
+  geom_point(aes(x = Hansen_Percent.Predicted, y = Wasserman_Percent.Predicted), color = "#00468Bff") +
   
   #adding labs
   labs(y = "% Predicted: Wasserman", x = "% Predicted: Hansen", color = "BMI", shape = "Sex") +    
@@ -1151,11 +1182,7 @@ W_vs_H <-
   geom_text(label = "Line of Identity", x= 5, y = 5, angle = 45, hjust = 0, vjust = -0.5, size = 4.5, alpha = 0.02, family = "serif") +
   # geom_text(label = "0 -> 0", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
   # geom_text(label = "1 -> 1", x = 40, y = 25, color = "black", size = 4.5, alpha = 0.02) +
-  
-  #color and legends
-  scale_color_manual(values = Agreement_colors) +
-  scale_fill_manual(values = Agreement_colors) +
-  guides(color = guide_legend(override.aes = list(shape = 22, fill = c("#B9741F", "#213958", "#990006")))) +
+
   #scale_shape_manual(values = c(16,17,16,17,16,17)) +
   coord_equal(xlim = c(0,160), ylim = c(0,160) ) +
   scale_x_continuous(breaks = seq(0,160,by = 20)) +
@@ -1188,7 +1215,8 @@ W_vs_B <-
   geom_rect(aes(xmin = 80, xmax = 160, ymin = 0, ymax = 80), fill = "lightgrey", alpha = 0.02) +
   geom_rect(aes(xmin = 0, xmax = 80, ymin = 80, ymax = 160), fill = "lightgrey", alpha = 0.02) +
   
-  geom_point(aes(x = Bruce_Percent.Predicted, y = Wasserman_Percent.Predicted, color = BMI_cat, shape = Sex)) +
+  #data
+  geom_point(aes(x = Bruce_Percent.Predicted, y = Wasserman_Percent.Predicted), color = "#00468Bff") +
   
   #adding labs
   labs(y = "% Predicted: Wasserman", x = "% Predicted: Bruce", color = "BMI", shape = "Sex") +    
@@ -1198,10 +1226,7 @@ W_vs_B <-
   # geom_text(label = "0 -> 0", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
   # geom_text(label = "1 -> 1", x = 40, y = 25, color = "black", size = 4.5, alpha = 0.02) +
   
-  #color and legends
-  scale_color_manual(values = Agreement_colors) +
-  scale_fill_manual(values = Agreement_colors) +
-  guides(color = guide_legend(override.aes = list(shape = 22, fill = c("#B9741F", "#213958", "#990006")))) +
+
   #scale_shape_manual(values = c(16,17,16,17,16,17)) +
   coord_equal(xlim = c(0,160), ylim = c(0,160) ) +
   scale_x_continuous(breaks = seq(0,160,by = 20)) +
@@ -1234,7 +1259,7 @@ w_vs_J <-
   geom_rect(aes(xmin = 80, xmax = 160, ymin = 0, ymax = 80), fill = "lightgrey", alpha = 0.02) +
   geom_rect(aes(xmin = 0, xmax = 80, ymin = 80, ymax = 160), fill = "lightgrey", alpha = 0.02) +
   
-  geom_point(aes(x = Jones_Percent.Predicted, y = Wasserman_Percent.Predicted, color = BMI_cat, shape = Sex)) +
+  geom_point(aes(x = Jones_Percent.Predicted, y = Wasserman_Percent.Predicted), color = "#00468Bff") +
   
   #adding labs
   labs(y = "% Predicted: Wasserman", x = "% Predicted: Jones", color = "BMI", shape = "Sex") +    
@@ -1244,10 +1269,7 @@ w_vs_J <-
   # geom_text(label = "0 -> 0", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
   # geom_text(label = "1 -> 1", x = 40, y = 25, color = "black", size = 4.5, alpha = 0.02) +
   
-  #color and legends
-  scale_color_manual(values = Agreement_colors) +
-  scale_fill_manual(values = Agreement_colors) +
-  guides(color = guide_legend(override.aes = list(shape = 22, fill = c("#B9741F", "#213958", "#990006")))) +
+
   #scale_shape_manual(values = c(16,17,16,17,16,17)) +
   coord_equal(xlim = c(0,160), ylim = c(0,160) ) +
   scale_x_continuous(breaks = seq(0,160,by = 20)) +
@@ -1282,7 +1304,7 @@ W_vs_N <-
   geom_rect(aes(xmin = 80, xmax = 160, ymin = 0, ymax = 80), fill = "lightgrey", alpha = 0.02) +
   geom_rect(aes(xmin = 0, xmax = 80, ymin = 80, ymax = 160), fill = "lightgrey", alpha = 0.02) +
   
-  geom_point(aes(x = Neder_Percent.Predicted, y = Wasserman_Percent.Predicted, color = BMI_cat, shape = Sex)) +
+  geom_point(aes(x = Neder_Percent.Predicted, y = Wasserman_Percent.Predicted), color = "#00468Bff") +
   
   #adding labs
   labs(y = "% Predicted: Wasserman", x = "% Predicted: Neder", color = "BMI", shape = "Sex") +    
@@ -1292,10 +1314,7 @@ W_vs_N <-
   # geom_text(label = "0 -> 0", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
   # geom_text(label = "1 -> 1", x = 40, y = 25, color = "black", size = 4.5, alpha = 0.02) +
   
-  #color and legends
-  scale_color_manual(values = Agreement_colors) +
-  scale_fill_manual(values = Agreement_colors) +
-  guides(color = guide_legend(override.aes = list(shape = 22, fill = c("#B9741F", "#213958", "#990006")))) +
+
   #scale_shape_manual(values = c(16,17,16,17,16,17)) +
   coord_equal(xlim = c(0,160), ylim = c(0,160) ) +
   scale_x_continuous(breaks = seq(0,160,by = 20)) +
@@ -1326,7 +1345,8 @@ H_vs_B <-
   geom_rect(aes(xmin = 80, xmax = 160, ymin = 0, ymax = 80), fill = "lightgrey", alpha = 0.02) +
   geom_rect(aes(xmin = 0, xmax = 80, ymin = 80, ymax = 160), fill = "lightgrey", alpha = 0.02) +
   
-  geom_point(aes(x = Bruce_Percent.Predicted, y = Hansen_Percent.Predicted, color = BMI_cat, shape = Sex)) +
+  #Data
+  geom_point(aes(x = Bruce_Percent.Predicted, y = Hansen_Percent.Predicted), color = "#00468Bff") +
   
   #adding labs
   labs(y = "% Predicted: Hansen", x = "% Predicted: Bruce", color = "BMI", shape = "Sex") +    
@@ -1336,10 +1356,7 @@ H_vs_B <-
   # geom_text(label = "0 -> 0", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
   # geom_text(label = "1 -> 1", x = 40, y = 25, color = "black", size = 4.5, alpha = 0.02) +
   
-  #color and legends
-  scale_color_manual(values = Agreement_colors) +
-  scale_fill_manual(values = Agreement_colors) +
-  guides(color = guide_legend(override.aes = list(shape = 22, fill = c("#B9741F", "#213958", "#990006")))) +
+
   #scale_shape_manual(values = c(16,17,16,17,16,17)) +
   coord_equal(xlim = c(0,160), ylim = c(0,160) ) +
   scale_x_continuous(breaks = seq(0,160,by = 20)) +
@@ -1374,7 +1391,8 @@ H_vs_J <-
   geom_rect(aes(xmin = 80, xmax = 160, ymin = 0, ymax = 80), fill = "lightgrey", alpha = 0.02) +
   geom_rect(aes(xmin = 0, xmax = 80, ymin = 80, ymax = 160), fill = "lightgrey", alpha = 0.02) +
   
-  geom_point(aes(x = Jones_Percent.Predicted, y = Hansen_Percent.Predicted, color = BMI_cat, shape = Sex)) +
+  #data
+  geom_point(aes(x = Jones_Percent.Predicted, y = Hansen_Percent.Predicted), color = "#00468Bff") +
   
   #adding labs
   labs(y = "% Predicted: Hansen", x = "% Predicted: Jones", color = "BMI", shape = "Sex") +    
@@ -1384,11 +1402,7 @@ H_vs_J <-
   # geom_text(label = "0 -> 0", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
   # geom_text(label = "1 -> 1", x = 40, y = 25, color = "black", size = 4.5, alpha = 0.02) +
   
-  #color and legends
-  scale_color_manual(values = Agreement_colors) +
-  scale_fill_manual(values = Agreement_colors) +
-  guides(color = guide_legend(override.aes = list(shape = 22, fill = c("#B9741F", "#213958", "#990006")))) +
-  #scale_shape_manual(values = c(16,17,16,17,16,17)) +
+
   coord_equal(xlim = c(0,160), ylim = c(0,160) ) +
   scale_x_continuous(breaks = seq(0,160,by = 20)) +
   scale_y_continuous(breaks = seq(0,160,by = 20)) +
@@ -1420,7 +1434,9 @@ AgreementPlots %>%
   geom_rect(aes(xmin = 80, xmax = 160, ymin = 0, ymax = 80), fill = "lightgrey", alpha = 0.02) +
   geom_rect(aes(xmin = 0, xmax = 80, ymin = 80, ymax = 160), fill = "lightgrey", alpha = 0.02) +
   
-  geom_point(aes(x = Neder_Percent.Predicted, y = Hansen_Percent.Predicted, color = BMI_cat, shape = Sex)) +
+  #Data
+  geom_point(aes(x = Neder_Percent.Predicted, y = Hansen_Percent.Predicted), color = "#00468Bff") +
+  
   
   #adding labs
   labs(y = "% Predicted: Hansen", x = "% Predicted: Neder", color = "BMI", shape = "Sex") +    
@@ -1430,10 +1446,6 @@ AgreementPlots %>%
   # geom_text(label = "0 -> 0", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
   # geom_text(label = "1 -> 1", x = 40, y = 25, color = "black", size = 4.5, alpha = 0.02) +
   
-  #color and legends
-  scale_color_manual(values = Agreement_colors) +
-  scale_fill_manual(values = Agreement_colors) +
-  guides(color = guide_legend(override.aes = list(shape = 22, fill = c("#B9741F", "#213958", "#990006")))) +
   #scale_shape_manual(values = c(16,17,16,17,16,17)) +
   coord_equal(xlim = c(0,160), ylim = c(0,160) ) +
   scale_x_continuous(breaks = seq(0,160,by = 20)) +
@@ -1463,8 +1475,10 @@ B_vs_J <-
   geom_rect(aes(xmin = 80, xmax = 160, ymin = 0, ymax = 80), fill = "lightgrey", alpha = 0.02) +
   geom_rect(aes(xmin = 0, xmax = 80, ymin = 80, ymax = 160), fill = "lightgrey", alpha = 0.02) +
   
-  geom_point(aes(x = Jones_Percent.Predicted, y = Bruce_Percent.Predicted, color = BMI_cat, shape = Sex)) +
+  #Data
+  geom_point(aes(x = Jones_Percent.Predicted, y = Bruce_Percent.Predicted), color = "#00468Bff") +
   
+
   #adding labs
   labs(y = "% Predicted: Bruce", x = "% Predicted: Jones", color = "BMI", shape = "Sex") +    
   geom_text(label = "Reclassified", x = 20, y = 150, color = "black", size = 4.5, alpha = 0.02, family = "serif") +
@@ -1473,10 +1487,7 @@ B_vs_J <-
   # geom_text(label = "0 -> 0", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
   # geom_text(label = "1 -> 1", x = 40, y = 25, color = "black", size = 4.5, alpha = 0.02) +
   
-  #color and legends
-  scale_color_manual(values = Agreement_colors) +
-  scale_fill_manual(values = Agreement_colors) +
-  guides(color = guide_legend(override.aes = list(shape = 22, fill = c("#B9741F", "#213958", "#990006")))) +
+
   #scale_shape_manual(values = c(16,17,16,17,16,17)) +
   coord_equal(xlim = c(0,160), ylim = c(0,160) ) +
   scale_x_continuous(breaks = seq(0,160,by = 20)) +
@@ -1506,7 +1517,9 @@ B_vs_N <-
   geom_rect(aes(xmin = 80, xmax = 160, ymin = 0, ymax = 80), fill = "lightgrey", alpha = 0.02) +
   geom_rect(aes(xmin = 0, xmax = 80, ymin = 80, ymax = 160), fill = "lightgrey", alpha = 0.02) +
   
-  geom_point(aes(x = Neder_Percent.Predicted, y = Bruce_Percent.Predicted, color = BMI_cat, shape = Sex)) +
+  #Data
+  geom_point(aes(x = Neder_Percent.Predicted, y = Bruce_Percent.Predicted), color = "#00468Bff") +
+  
   
   #adding labs
   labs(y = "% Predicted: Bruce", x = "% Predicted: Neder", color = "BMI", shape = "Sex") +    
@@ -1516,10 +1529,7 @@ B_vs_N <-
   # geom_text(label = "0 -> 0", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
   # geom_text(label = "1 -> 1", x = 40, y = 25, color = "black", size = 4.5, alpha = 0.02) +
   
-  #color and legends
-  scale_color_manual(values = Agreement_colors) +
-  scale_fill_manual(values = Agreement_colors) +
-  guides(color = guide_legend(override.aes = list(shape = 22, fill = c("#B9741F", "#213958", "#990006")))) +
+
   #scale_shape_manual(values = c(16,17,16,17,16,17)) +
   coord_equal(xlim = c(0,160), ylim = c(0,160) ) +
   scale_x_continuous(breaks = seq(0,160,by = 20)) +
@@ -1549,7 +1559,9 @@ J_vs_N <-   AgreementPlots %>%
   geom_rect(aes(xmin = 80, xmax = 160, ymin = 0, ymax = 80), fill = "lightgrey", alpha = 0.02) +
   geom_rect(aes(xmin = 0, xmax = 80, ymin = 80, ymax = 160), fill = "lightgrey", alpha = 0.02) +
   
-  geom_point(aes(x = Neder_Percent.Predicted, y = Jones_Percent.Predicted, color = BMI_cat, shape = Sex)) +
+  #DATA
+  geom_point(aes(x = Neder_Percent.Predicted, y = Jones_Percent.Predicted), color = "#00468Bff") +
+  
   
   #adding labs
   labs(y = "% Predicted: Jones", x = "% Predicted: Neder", color = "BMI", shape = "Sex") +    
@@ -1559,10 +1571,7 @@ J_vs_N <-   AgreementPlots %>%
   # geom_text(label = "0 -> 0", x = 140, y = 140, color = "black", size = 4.5, alpha = 0.02) +
   # geom_text(label = "1 -> 1", x = 40, y = 25, color = "black", size = 4.5, alpha = 0.02) +
   
-  #color and legends
-  scale_color_manual(values = Agreement_colors) +
-  scale_fill_manual(values = Agreement_colors) +
-  guides(color = guide_legend(override.aes = list(shape = 22, fill = c("#B9741F", "#213958", "#990006")))) +
+
   #scale_shape_manual(values = c(16,17,16,17,16,17)) +
   coord_equal(xlim = c(0,160), ylim = c(0,160) ) +
   scale_x_continuous(breaks = seq(0,160,by = 20)) +
@@ -1600,8 +1609,9 @@ J_vs_N
 
 
 
-#### Analysis Corrected Dataset----------------------------------------------------------------
+#### Normaility check for Corrected Dataset----------------------------------------------------------------
 
+# using corrected values only
 #assess normality
 
 
@@ -1631,16 +1641,16 @@ shapiro.test(AccessCPET_Corrected$age)
 
 
 
-# mean values for paper
+########### mean values for paper ##########
 
-AccessCPET_Corrected %>% 
+AccessCPET %>% 
   select(c(
     gender,
     Mode,
-    VO2_peak.actual,
     age,
     bmi,
-    race
+    Race_Combined,
+    ethnicity
   )) %>% 
   tbl_summary(    
     statistic = list(
@@ -1649,11 +1659,42 @@ AccessCPET_Corrected %>%
   add_n()
 
 
+  # cpet results:
+AccessCPET %>% 
+  select(
+    VO2_kg_peak.actual,
+    VO2_peak.actual,
+    fperf_peakhr,
+    eperf_vco2_peak, 
+    fperf_rer, 
+    resp_ve
+  ) %>% 
+  tbl_summary(
+    digits = all_continuous() ~ 2,
+    statistic = all_continuous() ~ "{mean} ({sd})") 
+  
+
+# looking to see service connections for vo2
+AccessCPET %>%
+  mutate(Rating = as.factor(case_when(
+    VO2_kg_peak.actual < 15 ~ "100%",
+    VO2_kg_peak.actual >= 15 &  VO2_kg_peak.actual < 20 ~ "60%",
+    TRUE ~ "0%"
+  ))) %>% 
+  group_by(Rating) %>% 
+  summarise(n= n())
+
+
 
 # 1 comparing raw predicted values
 
 #Making a dataset without the measured values
 Access_Corrected_Tidy_FORanalaysis <- Access_Percent_predicted_tidy_Corrected %>% 
+  filter(
+    Equation != "Measured"
+  )
+
+Access_Corrected_Tidy_FORanalaysis_85 <- Access_Percent_predicted_tidy_Corrected_85 %>% 
   filter(
     Equation != "Measured"
   )
@@ -1671,6 +1712,11 @@ Access_Corrected_Tidy_FORanalaysis %>%
   group_by(Equation,Clinical_Interpretation ) %>% 
   summarise(count = n())
 
+Access_Corrected_Tidy_FORanalaysis_85 %>% 
+  group_by(Equation,Clinical_Interpretation ) %>% 
+  summarise(count = n())
+
+
 Access_Interpertation_wide_Corrected %>% 
   select(
     FRIEND,
@@ -1687,9 +1733,28 @@ Access_Interpertation_wide_Corrected %>%
     digits = all_continuous() ~ 2,) %>% 
   add_n()
 
+Access_Interpertation_wide_Corrected_85 %>% 
+  select(
+    FRIEND,
+    Wasserman,
+    Hansen,
+    Jones,
+    Bruce,
+    Neder
+  ) %>% 
+  tbl_summary(    
+    statistic = list(
+      all_continuous() ~ "{mean} ({sd})",
+      all_categorical() ~ "{n} / {N} ({p}%)"),
+    digits = all_continuous() ~ 2,) %>% 
+  add_n()
+
+
 
 Access_Corrected_Tidy_FORanalaysis$Equation <- factor(Access_Corrected_Tidy_FORanalaysis$Equation)
 
+
+##### MAIN ANALYSIS #####
 # non-parametric test for repeated measures (Friedman)
 
 friedman.test(Predicted ~ Equation | Subject_ID, data = Access_Corrected_Tidy_FORanalaysis)
@@ -1736,7 +1801,7 @@ for (i in 1:(length(Access_equations)-1)){
 
 
 
-#Kappa analysis
+#Kappa analysis 80 %
 
 # Initialize an empty matrix to store kappa values
 kappa_matrix <- matrix(NA, nrow = length(Access_equations), ncol = length(Access_equations), dimnames = list(Access_equations, Access_equations))
@@ -1782,7 +1847,64 @@ ggplot(melt(kappa_matrix), aes(x = Var1, y = Var2, fill = value))+
                        labels = c("0", "0.5", "1")) +
   geom_text(aes(label =value), color = "black") +
   labs(
-    title = "Pairwise Cohen's Kappa Among Equations",
+    title = "Pairwise Cohen's Kappa Among Equations: 80%",
+    fill = "Kappa",
+    x = "",
+    y = "") +
+  theme_minimal() +
+  guides(fill = guide_colourbar(
+    barwidth = 0.5,                            
+    barheight = 20))
+
+
+
+#Kappa analysis 85 %
+
+# Initialize an empty matrix to store kappa values
+kappa_matrix85 <- matrix(NA, nrow = length(Access_equations), ncol = length(Access_equations), dimnames = list(Access_equations, Access_equations))
+
+
+
+# Loop through each pair of equations and calculate Kappa
+
+
+for (i in 1:(length(Access_equations)-1)) {
+  for (j in (i+1):length(Access_equations)) {
+    
+    eq1 <- Access_Interpertation_wide_Corrected_85[[Access_equations[i]]]
+    eq2 <- Access_Interpertation_wide_Corrected_85[[Access_equations[j]]]
+    
+    Access_kappa_results85 <- kappa2(cbind(eq1, eq2))
+    cat("Kappa for", Access_equations[i], "vs", Access_equations[j], ":\n")
+    
+    print(Access_kappa_results85)
+    cat("\n")
+    
+    kappa_matrix85[i, j ] <- round(Access_kappa_results85$value, digits = 2)
+    kappa_matrix85[j, i ] <- round(Access_kappa_results85$value, digits = 2)
+    
+    
+  }
+}
+
+
+
+
+#Plotting heat map
+
+ggplot(melt(kappa_matrix85), aes(x = Var1, y = Var2, fill = value))+
+  geom_tile(color = "black",
+            lwd = 0.5,
+            linetype = 1) +
+  scale_fill_gradientn(colors = c("red", "white", "green"),
+                       values = scales::rescale(c(0, 0.5, 1)),
+                       limits = c(0, 1),
+                       name = "Kappa",
+                       breaks = c(0, 0.5, 1),
+                       labels = c("0", "0.5", "1")) +
+  geom_text(aes(label =value), color = "black") +
+  labs(
+    title = "Pairwise Cohen's Kappa Among Equations: 85%",
     fill = "Kappa",
     x = "",
     y = "") +
@@ -1927,6 +2049,131 @@ Classifications_Corrected <- Access_Interpertation_wide_Corrected %>%
   )
 
 
+
+Classifications_Corrected85 <- Access_Interpertation_wide_Corrected_85 %>% 
+  select(Subject_ID, FRIEND, Wasserman, Hansen, Bruce, Jones, Neder) %>% 
+  mutate(
+    FvW = case_when(
+      FRIEND == "1" & Wasserman == "1" ~ 0,
+      FRIEND == "0" & Wasserman == "0" ~ 0,
+      FRIEND == "1" & Wasserman == "0" ~ -1,
+      FRIEND == "0" & Wasserman == "1" ~ 1,
+      TRUE ~ NA_real_
+    ),
+    
+    FvH = case_when(
+      FRIEND == "1" & Hansen == "1" ~ 0,
+      FRIEND == "0" & Hansen == "0" ~ 0,
+      FRIEND == "1" & Hansen == "0" ~ -1,
+      FRIEND == "0" & Hansen == "1" ~ 1,
+      TRUE ~ NA_real_
+    ),
+    
+    FvB = case_when(
+      FRIEND == "1" & Bruce == "1" ~ 0,
+      FRIEND == "0" & Bruce == "0" ~ 0,
+      FRIEND == "1" & Bruce == "0" ~ -1,
+      FRIEND == "0" & Bruce == "1" ~ 1,
+      TRUE ~ NA_real_
+    ),
+    
+    FvJ = case_when(
+      FRIEND == "1" & Jones == "1" ~ 0,
+      FRIEND == "0" & Jones == "0" ~ 0,
+      FRIEND == "1" & Jones == "0" ~ -1,
+      FRIEND == "0" & Jones == "1" ~ 1,
+      TRUE ~ NA_real_
+    ),
+    
+    FvN = case_when(
+      FRIEND == "1" & Neder == "1" ~ 0,
+      FRIEND == "0" & Neder == "0" ~ 0,
+      FRIEND == "1" & Neder == "0" ~ -1,
+      FRIEND == "0" & Neder == "1" ~ 1,
+      TRUE ~ NA_real_
+    ),
+    
+    WvH = case_when(
+      Wasserman == "1" & Hansen == "1" ~ 0,
+      Wasserman == "0" & Hansen == "0" ~ 0,
+      Wasserman == "1" & Hansen == "0" ~ -1,
+      Wasserman == "0" & Hansen == "1" ~ 1,
+      TRUE ~ NA_real_
+    ),
+    
+    WvB = case_when(
+      Wasserman == "1" & Bruce == "1" ~ 0,
+      Wasserman == "0" & Bruce == "0" ~ 0,
+      Wasserman == "1" & Bruce == "0" ~ -1,
+      Wasserman == "0" & Bruce == "1" ~ 1,
+      TRUE ~ NA_real_
+    ),
+    
+    WvJ = case_when(
+      Wasserman == "1" & Jones == "1" ~ 0,
+      Wasserman == "0" & Jones == "0" ~ 0,
+      Wasserman == "1" & Jones == "0" ~ -1,
+      Wasserman == "0" & Jones == "1" ~ 1,
+      TRUE ~ NA_real_
+    ),
+    
+    WvN = case_when(
+      Wasserman == "1" & Neder == "1" ~ 0,
+      Wasserman == "0" & Neder == "0" ~ 0,
+      Wasserman == "1" & Neder == "0" ~ -1,
+      Wasserman == "0" & Neder == "1" ~ 1,
+      TRUE ~ NA_real_
+    ),
+    
+    HvB = case_when(
+      Hansen == "1" & Bruce == "1" ~ 0,
+      Hansen == "0" & Bruce == "0" ~ 0,
+      Hansen == "1" & Bruce == "0" ~ -1,
+      Hansen == "0" & Bruce == "1" ~ 1,
+      TRUE ~ NA_real_
+    ),
+    
+    HvJ = case_when(
+      Hansen == "1" & Jones == "1" ~ 0,
+      Hansen == "0" & Jones == "0" ~ 0,
+      Hansen == "1" & Jones == "0" ~ -1,
+      Hansen == "0" & Jones == "1" ~ 1,
+      TRUE ~ NA_real_
+    ),
+    
+    HvN = case_when(
+      Hansen == "1" & Neder == "1" ~ 0,
+      Hansen == "0" & Neder == "0" ~ 0,
+      Hansen == "1" & Neder == "0" ~ -1,
+      Hansen == "0" & Neder == "1" ~ 1,
+      TRUE ~ NA_real_
+    ),
+    
+    BvJ = case_when(
+      Bruce == "1" & Jones == "1" ~ 0,
+      Bruce == "0" & Jones == "0" ~ 0,
+      Bruce == "1" & Jones == "0" ~ -1,
+      Bruce == "0" & Jones == "1" ~ 1,
+      TRUE ~ NA_real_
+    ),
+    
+    BvN = case_when(
+      Bruce == "1" & Neder == "1" ~ 0,
+      Bruce == "0" & Neder == "0" ~ 0,
+      Bruce == "1" & Neder == "0" ~ -1,
+      Bruce == "0" & Neder == "1" ~ 1,
+      TRUE ~ NA_real_
+    ),
+    
+    JvN = case_when(
+      Jones == "1" & Neder == "1" ~ 0,
+      Jones == "0" & Neder == "0" ~ 0,
+      Jones == "1" & Neder == "0" ~ -1,
+      Jones == "0" & Neder == "1" ~ 1,
+      TRUE ~ NA_real_
+    )
+  )
+
 columns_check <- c("FvW", "FvH", "FvB", "FvJ", "FvN", "WvH", "WvB", "WvJ", "WvN", "HvB", "HvJ", "HvN", "BvJ",
                    "BvN", "JvN")
 
@@ -1939,10 +2186,91 @@ Classifications_Corrected <- Classifications_Corrected %>%
 
 
 
+# plots to look at difference in rating
+library(ggalluvial)
+library(networkD3)
+
+
+# can try to do this for all pairs
+
+Classifications_Corrected %>% 
+  select(FRIEND, Wasserman, Hansen, Bruce, Jones, Neder) %>% 
+  mutate(Subject_ID = row_number()) %>% 
+  pivot_longer(
+    cols = c(FRIEND, Wasserman, Hansen, Bruce, Jones, Neder),
+    names_to = "Equation",
+    values_to = "Classification"
+  ) %>% 
+  filter(Equation == "FRIEND" | Equation == "Wasserman") %>% 
+  ggplot(aes(x = Equation, stratum = Classification, alluvium = Subject_ID, fill = factor(Classification), label = Classification)) +
+  geom_flow(stat = "alluvium") +
+  geom_stratum()
+
+
+
+# based on chatgpt making a upset plot? https://krassowski.github.io/complex-upset/articles/Examples_R.html
+
+library(ComplexUpset)
+
+# Use your data
+df <- Classifications_Corrected %>% 
+  select(
+    FRIEND, Wasserman, Hansen, Bruce, Jones, Neder
+  )
+
+# Convert columns to logical (1/0) --> true or false
+df_binary <- df %>%
+  mutate(across(everything(), ~ as.character(.) == "1"))
+
+# Plot UpSet
+upset(df_binary,
+      intersect = c("Wasserman", "Hansen", "Bruce", "Jones", "Neder", "FRIEND"),
+      name = "Classification",
+      base_annotations = list(
+        'Veterans' = intersection_size()
+      )) +
+  theme_minimal() +
+  theme(
+    axis.ticks.x = element_blank(),
+    axis.text.x = element_blank()
+  )
+  
+
+
+
+
+
+
 
 Classifications_Corrected %>%
-  count(count_NoChange == 15) 
+  count(count_NoChange) 
 
+Classifications_Corrected %>%
+  count(count_Reduced) 
+
+Classifications_Corrected %>%
+  count(count_Normal) 
+
+
+# tabel for paper
+Classifications_Corrected %>%
+  mutate(across(all_of(columns_check), factor)) %>% 
+  select(all_of(columns_check)) %>% 
+  tbl_summary(    
+    statistic = list(
+      all_categorical() ~ "{n} / {N} ({p}%)"),
+    digits = all_continuous() ~ 2,) %>% 
+  add_n()
+
+  
+Classifications_Corrected85 %>%
+  mutate(across(all_of(columns_check), factor)) %>% 
+  select(all_of(columns_check)) %>% 
+  tbl_summary(    
+    statistic = list(
+      all_categorical() ~ "{n} / {N} ({p}%)"),
+    digits = all_continuous() ~ 2,) %>% 
+  add_n()
 
 
 #comparing (age + sex + weight + height) between two  groups
@@ -1999,7 +2327,8 @@ Classifications_Corrected %>%
     statistic = list(
       all_categorical() ~ "{n} / {N} ({p}%)"),
     digits = all_continuous() ~ 2,) %>% 
-  add_n()
+  add_n() %>% 
+  add_p
 
 
 #plots:
@@ -2453,6 +2782,8 @@ kruskal_results
 
 # ALL PLOTS FOR PAPER 1.0 -----------------------------------------------------
 
+
+### FIGURE 1
 # Figure 1 of paper: Violin plot of % Predicted VȮ2 across equations.
 Violin_Pred <- Access_Percent_predicted_tidy_Corrected %>% 
   filter(Equation != "Measured") %>%
@@ -2462,7 +2793,7 @@ Violin_Pred <- Access_Percent_predicted_tidy_Corrected %>%
   # stat_summary(fun.data = mean_sdl, fun.args = list(mult = 1), geom = "errorbar", width = 0.2) +
   theme_classic() +
   scale_fill_jco() +
-  labs(y = expression(Predicted~Peak~VO[2]~(ml%*%min^-1)), x = "") +
+  labs(y = expression(Predicted~Peak~VO[2]~(mL/min)), x = "") +
   theme(
     legend.position = "none",
     axis.title.y = element_text(size = 16),
@@ -2490,11 +2821,42 @@ Violin_Percent <- Access_Percent_predicted_tidy_Corrected %>%
   )
 
 
+Fig1 <- (Violin_Pred / Violin_Percent) 
+
+ggsave("Figure1.tiff", plot = Fig1, width = 8, height = 7, units = "in", dpi = 900, device = "tiff")
 
 
-#Figure 2 trying to look at them separately and grouping on word myself
+# Figure 2
+
+Fig2 <- F_vs_W
+
+ggsave("Figure2.tiff", plot = Fig2, width = 6.5, height = 5.5, units = "in", dpi = 900, device = "tiff")
+
+
+
+#Analaysis for paper only
+#getting numbrs for changes in BMI in our populations
+
+Access_Corrected_Tidy_FORanalaysis %>% 
+  mutate(
+    Spider_Grouping = factor(case_when(
+      bmi <= 28 ~ "BMI 1",
+      
+      bmi > 28 & bmi <= 35 ~ "BMI 2",
+      
+      bmi > 35 ~ "BMI 3",
+      
+      TRUE ~ NA_character_))) %>% 
+  group_by(Equation, Spider_Grouping) %>% 
+  summarise(Mean_Predicted = mean(Percent.Predicted), .groups = "drop")
+
+
+
+
+# supplemental plots
+
 emptyplot <- 
-AgreementPlots %>%  
+  AgreementPlots %>%  
   ggplot(color = "white") +
   #adding line for agreements + shades    
   geom_vline(xintercept = 80, linetype = "dashed", color = "white", size = 0.8, alpha = 0.5) +
@@ -2519,67 +2881,29 @@ AgreementPlots %>%
 
 
 
-P1 <- (F_vs_W + F_vs_H ) & theme(legend.position = "none") 
-P2 <- (F_vs_B + F_vs_J) & theme(legend.position = "none") 
-P3 <- (F_vs_N + emptyplot)  & theme(legend.position = "none")
+#agreement plots
+
+e1 <- F_vs_H + F_vs_B + plot_annotation(tag_levels = list(c("A", "B")))
+ggsave("e-Figure1A.tiff", plot = e1, width = 11, height = 7, units = "in", dpi = 900, device = "tiff")
 
 
+e2 <- F_vs_J + F_vs_N + plot_annotation(tag_levels = list(c("C", "D")))
+ggsave("e-Figure1B.tiff", plot = e2, width = 11, height = 7, units = "in", dpi = 900, device = "tiff")
 
+e3 <- W_vs_H + W_vs_B + plot_annotation(tag_levels = list(c("E", "F")))
+ggsave("e-Figure1C.tiff", plot = e3, width = 11, height = 7, units = "in", dpi = 900, device = "tiff")
 
-(W_vs_H + W_vs_B) + plot_layout(guides = "collect") 
-(w_vs_J + W_vs_N) + plot_layout(guides = "collect") 
+e4 <- w_vs_J + W_vs_N + plot_annotation(tag_levels = list(c("G", "H")))
+ggsave("e-Figure1D.tiff", plot = e4, width = 11, height = 7, units = "in", dpi = 900, device = "tiff")
 
-(H_vs_B + H_vs_J) + plot_layout(guides = "collect") 
-(H_vs_N + plot_spacer()) + plot_layout(guides = "collect") 
+e5 <- H_vs_B + H_vs_J + plot_annotation(tag_levels = list(c("I", "J")))
+ggsave("e-Figure1E.tiff", plot = e5, width = 11, height = 7, units = "in", dpi = 900, device = "tiff")
 
-(B_vs_J + B_vs_N) + plot_layout(guides = "collect") 
-(J_vs_N + plot_spacer()) + plot_layout(guides = "collect") 
+e6 <- H_vs_N + B_vs_J + plot_annotation(tag_levels = list(c("K", "L")))
+ggsave("e-Figure1F.tiff", plot = e6, width = 11, height = 7, units = "in", dpi = 900, device = "tiff")
 
-
-#Figure one:
-(Violin_Pred / Violin_Percent) 
-
-# Figure 2, Spider Plot:
-(SpiderPlot_maleBMI | SpiderPlot_femaleBMI) + plot_layout(guides = "collect") & theme(legend.position = "bottom")
-
-
-
-# Figure 2: Spider Plot separated 
-((SpiderPlot_maleBMI | SpiderPlot_femaleBMI) + plot_layout(tag_level = 'new')) / ((SpiderPlot_maleAge | SpiderPlot_femaleAge) + plot_layout(tag_level = 'new')) + plot_layout(guides = "collect") & theme(legend.position = "bottom") 
-
-
-# Figure 4 of paper: agreement plots for each pair using the corrected dataset 
-
-(F_vs_W + F_vs_H) / (F_vs_B + F_vs_J) / (F_vs_N + plot_spacer()) + plot_layout(guides = "collect") +  plot_annotation(title = "A")
-
-(W_vs_H + W_vs_B) / ((w_vs_J) + W_vs_N) / (plot_spacer() + plot_spacer()) + plot_layout(guides = "collect") +  plot_annotation(title = "B")
-
-(H_vs_B + H_vs_J) / (H_vs_N + plot_spacer()) / (plot_spacer() + plot_spacer()) + plot_layout(guides = "collect") +  plot_annotation(title = "C")
-
-(B_vs_J + B_vs_N) / (plot_spacer() + plot_spacer()) / (plot_spacer() + plot_spacer()) + plot_layout(guides = "collect") + plot_annotation(title = "D")
-
-(J_vs_N + plot_spacer()) / (plot_spacer() + plot_spacer()) / (plot_spacer() + plot_spacer()) + plot_layout(guides = "collect") +  plot_annotation(title = "E")
-
-
-#Analaysis for paper only
-#getting numbrs for changes in BMI in our populations
-
-Access_Corrected_Tidy_FORanalaysis %>% 
-  mutate(
-    Spider_Grouping = factor(case_when(
-      bmi <= 28 ~ "BMI 1",
-      
-      bmi > 28 & bmi <= 35 ~ "BMI 2",
-      
-      bmi > 35 ~ "BMI 3",
-      
-      TRUE ~ NA_character_))) %>% 
-  group_by(Equation, Spider_Grouping) %>% 
-  summarise(Mean_Predicted = mean(Percent.Predicted), .groups = "drop")
-
-
-
-
+e7 <- B_vs_N + J_vs_N + plot_annotation(tag_levels = list(c("M", "N")))
+ggsave("e-Figure1G.tiff", plot = e7, width = 11, height = 7, units = "in", dpi = 900, device = "tiff")
 
 
 #-------------------------------------------------------------------------------
@@ -3593,6 +3917,9 @@ AccessCPET_Corrected %>%
   )
 
 
+AccessCPET_Corrected %>% 
+  select(gender, age, bmi, Mode, race, Status, ) %>% 
+  tbl_summary()
 
 # table 4:
 Access_Corrected_Tidy_FORanalaysis %>% 
@@ -3612,22 +3939,15 @@ Access_Corrected_Tidy_FORanalaysis %>%
     digits = all_continuous() ~ 2
   ) 
 
-
-
-############# Arjomadni Index ###################
-
-#looking at the magnitiude of the change between equations http://127.0.0.1:19633/graphics/plot_zoom_png?width=1200&height=900
-
-
+##### AI Calcuations
+#looking at the magnitiude of the change between equation
 # bringing in new race informaiton
 
+#Getting AI calcuated
 
-AccessCPET_Corrected <- 
-  merge(
-    AccessCPET_Corrected,
-    AccessCPET[,c("Subject_ID", "Race_Combined")],
-    by = "Subject_ID"
-  )
+#getting AD using corrected values using 11% corrtectiong. Including MODE of testing
+
+### Full AD Datatset #####
 
 
 AccessCPET_Corrected <- AccessCPET_Corrected %>% 
@@ -3651,14 +3971,14 @@ AccessCPET_Corrected <- AccessCPET_Corrected %>%
     AI_BvN = abs(Bruce_Percent.Predicted - Neder_Percent.Predicted),
     
     AI_JvN = abs(Jones_Percent.Predicted - Neder_Percent.Predicted)
-      )
+  )
 
 AccessCPET_Corrected %>% 
   select(
     "AI_FvW", "AI_FvH","AI_FvB" , "AI_FvJ",  "AI_FvN",  "AI_WvH", "AI_WvB", "AI_WvJ", "AI_WvN", "AI_HvB", "AI_HvJ" , "AI_HvN" ,"AI_BvJ", "AI_BvN","AI_JvN") %>% 
-tbl_summary(
-  digits = all_continuous() ~ 2
-) 
+  tbl_summary(
+    digits = all_continuous() ~ 2
+  ) 
 
 AI_Analysis <- AccessCPET_Corrected %>% 
   select(
@@ -3667,13 +3987,9 @@ AI_Analysis <- AccessCPET_Corrected %>%
     gender,
     age,
     bmi,
-    BMI_Grouping,
-    Age_Grouping,
     Race_Combined,
     "AI_FvW", "AI_FvH","AI_FvB" , "AI_FvJ",  "AI_FvN",  "AI_WvH", "AI_WvB", "AI_WvJ", 
     "AI_WvN", "AI_HvB", "AI_HvJ" , "AI_HvN" ,"AI_BvJ", "AI_BvN","AI_JvN") 
-
-
 
 # Making a long version
 
@@ -3686,20 +4002,178 @@ AI_Analysis_long <- AI_Analysis %>%
   )
 
 
+AccessCPET_Uncorrected <- 
+  merge(
+    AccessCPET_Uncorrected,
+    AccessCPET[,c("Subject_ID", "Race_Combined")],
+    by = "Subject_ID"
+  )
 
 
-AI_Analysis_long$Pair <- factor(AI_Analysis_long$Pair)
-AI_Analysis_long$Race_Combined <- factor(AI_Analysis_long$Race_Combined)
+AccessCPET_Uncorrected <- AccessCPET_Uncorrected %>% 
+  mutate(
+    AI_FvW = abs(FRIEND_Percent.Predicted - Wasserman_Percent.Predicted),
+    AI_FvH = abs(FRIEND_Percent.Predicted - Hansen_Percent.Predicted),
+    AI_FvB = abs(FRIEND_Percent.Predicted - Bruce_Percent.Predicted),
+    AI_FvJ = abs(FRIEND_Percent.Predicted - Jones_Percent.Predicted),
+    AI_FvN = abs(FRIEND_Percent.Predicted - Neder_Percent.Predicted),
+    
+    AI_WvH = abs(Wasserman_Percent.Predicted - Hansen_Percent.Predicted),
+    AI_WvB = abs(Wasserman_Percent.Predicted - Bruce_Percent.Predicted),
+    AI_WvJ = abs(Wasserman_Percent.Predicted - Jones_Percent.Predicted),
+    AI_WvN = abs(Wasserman_Percent.Predicted - Neder_Percent.Predicted),
+    
+    AI_HvB = abs(Hansen_Percent.Predicted - Bruce_Percent.Predicted),
+    AI_HvJ = abs(Hansen_Percent.Predicted - Jones_Percent.Predicted),
+    AI_HvN = abs(Hansen_Percent.Predicted - Neder_Percent.Predicted),
+    
+    AI_BvJ = abs(Bruce_Percent.Predicted - Jones_Percent.Predicted),
+    AI_BvN = abs(Bruce_Percent.Predicted - Neder_Percent.Predicted),
+    
+    AI_JvN = abs(Jones_Percent.Predicted - Neder_Percent.Predicted)
+  )
 
+AccessCPET_Uncorrected %>% 
+  select(
+    "AI_FvW", "AI_FvH","AI_FvB" , "AI_FvJ",  "AI_FvN",  "AI_WvH", "AI_WvB", "AI_WvJ", "AI_WvN", "AI_HvB", "AI_HvJ" , "AI_HvN" ,"AI_BvJ", "AI_BvN","AI_JvN") %>% 
+  tbl_summary(
+    digits = all_continuous() ~ 2
+  ) 
+
+
+AI_Analysis_Uncorrected  <- AccessCPET_Uncorrected %>% 
+  select(
+    Subject_ID,
+    Mode,
+    gender,
+    age,
+    bmi,
+    Race_Combined = Race_Combined.x,
+    "AI_FvW", "AI_FvH","AI_FvB" , "AI_FvJ",  "AI_FvN",  "AI_WvH", "AI_WvB", "AI_WvJ", 
+    "AI_WvN", "AI_HvB", "AI_HvJ" , "AI_HvN" ,"AI_BvJ", "AI_BvN","AI_JvN") 
+
+
+# Making a long version
+
+AI_AnalysisUncorrected_long <- AI_Analysis_Uncorrected %>% 
+  pivot_longer(
+    cols = c(    "AI_FvW", "AI_FvH","AI_FvB" , "AI_FvJ",  "AI_FvN",  "AI_WvH", "AI_WvB", "AI_WvJ", 
+                 "AI_WvN", "AI_HvB", "AI_HvJ" , "AI_HvN" ,"AI_BvJ", "AI_BvN","AI_JvN"),
+    names_to = c(".value", "Pair"),
+    names_sep = "_"
+  )
+
+
+#-------------------------------------------------------------------------------
+###### Making Bike vs Tread datasets for AD ########
+## getting uncorrected values for bike and tread #####
+
+AI_Analysis.Tread <- AccessCPET_Uncorrected %>% 
+  filter(
+    Mode == "Treadmill"
+  ) %>% 
+  select(
+    Subject_ID,
+    Mode,
+    gender,
+    age,
+    bmi,
+    Race_Combined = Race_Combined.x, 
+    "AI_FvW", "AI_FvH","AI_FvB" , "AI_FvJ",  "AI_FvN",  "AI_WvH", "AI_WvB", "AI_WvJ", 
+    "AI_WvN", "AI_HvB", "AI_HvJ" , "AI_HvN" ,"AI_BvJ", "AI_BvN","AI_JvN") 
+
+# Making a long version
+
+AI_Analysis_long.Tread <- AI_Analysis.Tread %>% 
+  pivot_longer(
+    cols = c(    "AI_FvW", "AI_FvH","AI_FvB" , "AI_FvJ",  "AI_FvN",  "AI_WvH", "AI_WvB", "AI_WvJ", 
+                 "AI_WvN", "AI_HvB", "AI_HvJ" , "AI_HvN" ,"AI_BvJ", "AI_BvN","AI_JvN"),
+    names_to = c(".value", "Pair"),
+    names_sep = "_"
+  )
+
+
+AI_Analysis.Bike <- AccessCPET_Uncorrected %>% 
+  filter(
+    Mode == "Bike"
+  ) %>% 
+  select(
+    Subject_ID,
+    gender,
+    age,
+    bmi,
+    Race_Combined = Race_Combined.x,
+    "AI_FvW", "AI_FvH","AI_FvB" , "AI_FvJ",  "AI_FvN",  "AI_WvH", "AI_WvB", "AI_WvJ", 
+    "AI_WvN", "AI_HvB", "AI_HvJ" , "AI_HvN" ,"AI_BvJ", "AI_BvN","AI_JvN") 
+
+# Making a long version
+
+AI_Analysis_long.Bike <- AI_Analysis.Bike %>% 
+  pivot_longer(
+    cols = c(    "AI_FvW", "AI_FvH","AI_FvB" , "AI_FvJ",  "AI_FvN",  "AI_WvH", "AI_WvB", "AI_WvJ", 
+                 "AI_WvN", "AI_HvB", "AI_HvJ" , "AI_HvN" ,"AI_BvJ", "AI_BvN","AI_JvN"),
+    names_to = c(".value", "Pair"),
+    names_sep = "_"
+  )
+
+####corrected values just split#####
+
+
+AI_Analysis.TreadCorrected <- AccessCPET_Corrected %>% 
+  filter(
+    Mode == "Treadmill"
+  ) %>% 
+  select(
+    Subject_ID,
+    gender,
+    age,
+    bmi,
+    Race_Combined,
+    "AI_FvW", "AI_FvH","AI_FvB" , "AI_FvJ",  "AI_FvN",  "AI_WvH", "AI_WvB", "AI_WvJ", 
+    "AI_WvN", "AI_HvB", "AI_HvJ" , "AI_HvN" ,"AI_BvJ", "AI_BvN","AI_JvN") 
+
+# Making a long version
+
+AI_Analysis_long.TreadCorrected <- AI_Analysis.TreadCorrected %>% 
+  pivot_longer(
+    cols = c(    "AI_FvW", "AI_FvH","AI_FvB" , "AI_FvJ",  "AI_FvN",  "AI_WvH", "AI_WvB", "AI_WvJ", 
+                 "AI_WvN", "AI_HvB", "AI_HvJ" , "AI_HvN" ,"AI_BvJ", "AI_BvN","AI_JvN"),
+    names_to = c(".value", "Pair"),
+    names_sep = "_"
+  )
+
+
+AI_Analysis.BikeCorrected  <- AccessCPET_Corrected %>% 
+  filter(
+    Mode == "Bike"
+  ) %>% 
+  select(
+    Subject_ID,
+    gender,
+    age,
+    bmi,
+    Race_Combined,
+    "AI_FvW", "AI_FvH","AI_FvB" , "AI_FvJ",  "AI_FvN",  "AI_WvH", "AI_WvB", "AI_WvJ", 
+    "AI_WvN", "AI_HvB", "AI_HvJ" , "AI_HvN" ,"AI_BvJ", "AI_BvN","AI_JvN") 
+
+# Making a long version
+
+AI_Analysis_long.BikeCorrected <- AI_Analysis.BikeCorrected  %>% 
+  pivot_longer(
+    cols = c(    "AI_FvW", "AI_FvH","AI_FvB" , "AI_FvJ",  "AI_FvN",  "AI_WvH", "AI_WvB", "AI_WvJ", 
+                 "AI_WvN", "AI_HvB", "AI_HvJ" , "AI_HvN" ,"AI_BvJ", "AI_BvN","AI_JvN"),
+    names_to = c(".value", "Pair"),
+    names_sep = "_"
+  )
+
+
+
+###### AI PLOTS ######
+
+#FULL Corrected
 AI_Analysis_long %>% 
   ggplot() +
   geom_histogram(aes(x = AI))
-
-AI_Analysis_long %>% 
-  ggplot(aes(x = BMI_Grouping, y = AI, color= Pair)) +
-  geom_jitter() + 
-  geom_smooth(method = "lm") +
-  facet_wrap(~Pair)
 
 AI_Analysis_long %>% 
   ggplot(aes(x = AI, y = age, color= Pair)) +
@@ -3714,7 +4188,7 @@ AI_Analysis_long %>%
   facet_wrap(~Pair)
 
 AI_Analysis_long %>% 
-  ggplot(aes(x = AI, y = race, color= Pair)) +
+  ggplot(aes(x = AI, y = Race_Combined, color= Pair)) +
   geom_jitter() + 
   geom_smooth(method = "lm") +
   facet_wrap(~Pair)
@@ -3722,68 +4196,79 @@ AI_Analysis_long %>%
 AI_Analysis_long %>% 
   ggplot(aes(x = AI, y = Mode, color= Pair)) +
   geom_jitter() + 
+  geom_smooth(method = "lm") +
   facet_wrap(~Pair)
+
+#Tread
+AI_Analysis_long.Tread %>% 
+  ggplot() +
+  geom_histogram(aes(x = AI))
+
+AI_Analysis_long.Tread %>% 
+  ggplot(aes(x = AI, y = age, color= Pair)) +
+  geom_jitter() + 
+  geom_smooth(method = "lm") +
+  facet_wrap(~Pair)
+
+AI_Analysis_long.Tread %>% 
+  ggplot(aes(x = AI, y = gender, color= Pair)) +
+  geom_jitter() + 
+  geom_smooth(method = "lm") +
+  facet_wrap(~Pair)
+
+AI_Analysis_long.Tread %>% 
+  ggplot(aes(x = AI, y = Race_Combined, color= Pair)) +
+  geom_jitter() + 
+  geom_smooth(method = "lm") +
+  facet_wrap(~Pair)
+
+#BIke
+AI_Analysis_long.Bike %>% 
+  ggplot() +
+  geom_histogram(aes(x = AI))
+
+AI_Analysis_long.Bike %>% 
+  ggplot(aes(x = AI, y = age, color= Pair)) +
+  geom_jitter() + 
+  geom_smooth(method = "lm") +
+  facet_wrap(~Pair)
+
+AI_Analysis_long.Bike %>% 
+  ggplot(aes(x = AI, y = gender, color= Pair)) +
+  geom_jitter() + 
+  geom_smooth(method = "lm") +
+  facet_wrap(~Pair)
+
+AI_Analysis_long.Bike %>% 
+  ggplot(aes(x = AI, y = Race_Combined, color= Pair)) +
+  geom_jitter() + 
+  geom_smooth(method = "lm") +
+  facet_wrap(~Pair)
+####### RUNNING AI MODELS #########
+
+
+#### FULL DATATSET Corrected####
+
+AI_Analysis_long$Pair <- factor(AI_Analysis_long$Pair)
+AI_Analysis_long$Race_Combined <- factor(AI_Analysis_long$Race_Combined)
+
 
 levels(AI_Analysis_long$Race_Combined)
 
 AI_Analysis_long$Race_Combined <- factor(AI_Analysis_long$Race_Combined,
-                                levels = c("Caucasian", "Black", "Mexican-American", "Other", "Asian" ))
+                                         levels = c("Caucasian", "Black", "Mexican-American", "Other", "Asian" ))
 
-F_W_model_1 <- lm(AI_FvW ~ Mode + gender +  bmi + age + Race_Combined, data = AI_Analysis)
-F_W_model_2 <- glm(AI_FvW ~ Mode + gender +  bmi + age + Race_Combined, data = AI_Analysis, family = Gamma(link = "log"))
-
-check_model(F_W_model_1)
-check_model(F_W_model_2)
-
-parameters(F_W_model_1)
-parameters(F_W_model_2)
 
 # Get unique pairs
 pairs <- unique(AI_Analysis_long$Pair)
 
-# Initialize a list to store model summaries
-model_summaries <- list()
-
-# fixing the levels in BMI and age to have have 25-75 be the reference 
-AI_Analysis_long$BMI_Grouping <- relevel(AI_Analysis_long$BMI_Grouping, ref = "BMI: 25-75%") 
-AI_Analysis_long$Age_Grouping <- relevel(AI_Analysis_long$Age_Grouping, ref = "Age: 25-75%") 
-
-
-
-# Loop through each pair, filter the data, run the model, and store the summary
-for (pair in pairs) {
-  # Filter data for the current pair
-  pair_data <- filter(AI_Analysis_long, Pair == pair)
-  
-  # Run the regression model
-  model <- lm(AI ~ Mode + gender +  bmi + age + Race_Combined, data = pair_data)
-  
-  
-
-  # Store the summary
-  model_summaries[[pair]] <- summary(model)
-  
-  # Show the check_model plot for the current model
-  plot <- check_model(model)
-  print(plot)
-}
-
-# Print all model summaries
-model_summaries
-
-
-
-
-########################
 results_df <- data.frame()
 
-# Get unique pairs
-pairs <- unique(AI_Analysis_long$Pair)
 
 # Loop through each pair
 for(current_pair in pairs) {
   # Subset data for current pair
-  pair_data <- subset(AI_Analysis_long, Pair == current_pair)
+  pair_data <- filter(AI_Analysis_long, Pair == current_pair)
   
   # Fit the model
   model <- lm(AI ~ Mode + gender +  bmi + age + Race_Combined, data = pair_data)
@@ -3863,10 +4348,930 @@ results_df_2 <- results_df_2 %>%
   )
 
 # Save results to CSV
-write.csv(results_df_2, "model_summary_results.csv", row.names = FALSE)
+write.csv(results_df_2, "Full_Corrected.csv", row.names = FALSE)
 
 
 results_df %>% 
   filter(p_value < 0.05) %>% 
   group_by(Term) %>% 
-  summarise(count = n(), avg = mean(Estimate))
+  summarise(count = n(), avg = mean(abs(Estimate)))
+
+#### FULL DATATSET Unorrected####
+
+AI_AnalysisUncorrected_long$Pair <- factor(AI_AnalysisUncorrected_long$Pair)
+AI_AnalysisUncorrected_long$Race_Combined <- factor(AI_AnalysisUncorrected_long$Race_Combined)
+
+
+levels(AI_AnalysisUncorrected_long$Race_Combined)
+
+AI_AnalysisUncorrected_long$Race_Combined <- factor(AI_AnalysisUncorrected_long$Race_Combined,
+                                         levels = c("Caucasian", "Black", "Mexican-American", "Other", "Asian" ))
+
+
+# Get unique pairs
+pairs <- unique(AI_AnalysisUncorrected_long$Pair)
+
+results_df <- data.frame()
+
+
+# Loop through each pair
+for(current_pair in pairs) {
+  # Subset data for current pair
+  pair_data <- filter(AI_AnalysisUncorrected_long, Pair == current_pair)
+  
+  # Fit the model
+  model <- lm(AI ~ Mode + gender +  bmi + age + Race_Combined, data = pair_data)
+  
+  #check model
+  check_model(model)
+  
+  # Get model summary
+  model_summary <- summary(model)
+  
+  # Extract coefficients and p-values
+  coef_data <- data.frame(
+    Pair = current_pair,
+    Term = rownames(model_summary$coefficients),
+    Estimate = model_summary$coefficients[,1],
+    Std_Error = model_summary$coefficients[,2],
+    t_value = model_summary$coefficients[,3],
+    p_value = model_summary$coefficients[,4]
+  )
+  
+  # Add model fit statistics
+  coef_data$R_squared <- model_summary$r.squared
+  coef_data$Adj_R_squared <- model_summary$adj.r.squared
+  coef_data$F_statistic <- model_summary$fstatistic[1]
+  coef_data$F_p_value <- pf(model_summary$fstatistic[1], 
+                            model_summary$fstatistic[2], 
+                            model_summary$fstatistic[3], 
+                            lower.tail = FALSE)
+  
+  # Append to results dataframe
+  results_df <- rbind(results_df, coef_data)
+}
+
+
+
+# Round numeric columns to 4 decimal places
+results_df <- results_df %>%
+  mutate(across(where(is.numeric), ~round(., 4)))
+
+# Print the results
+print(results_df)
+
+results_df <- results_df %>% 
+  filter(Term != "(Intercept)")
+
+results_df_2 <- results_df %>% 
+  select(
+    Pair,
+    p_value,
+    Term,
+    Estimate
+  ) %>% 
+  pivot_wider(
+    names_from = Term,
+    values_from = c(Estimate, p_value)
+  )
+
+results_df_2 <- results_df_2 %>% 
+  select(
+    Pair,
+    Estimate_age,
+    Estimate_bmi,
+    Estimate_gender2,
+    Estimate_ModeTreadmill,
+    Estimate_Race_CombinedBlack,
+    "Estimate_Race_CombinedMexican-American",
+    Estimate_Race_CombinedAsian,
+    Estimate_Race_CombinedOther,
+    p_value_age,
+    p_value_bmi,
+    p_value_gender2,
+    p_value_ModeTreadmill,
+    p_value_Race_CombinedBlack,
+    "p_value_Race_CombinedMexican-American",
+    p_value_Race_CombinedAsian,
+    p_value_Race_CombinedOther
+  )
+
+# Save results to CSV
+write.csv(results_df_2, "Full_Uncorrected.csv", row.names = FALSE)
+
+
+results_df %>% 
+  filter(p_value < 0.05) %>% 
+  group_by(Term) %>% 
+  summarise(count = n(), avg = mean(abs(Estimate)))
+
+#### Tread only Uncorrected  #######
+
+
+AI_Analysis_long.Tread$Pair <- factor(AI_Analysis_long.Tread$Pair)
+AI_Analysis_long.Tread$Race_Combined <- factor(AI_Analysis_long.Tread$Race_Combined)
+
+
+levels(AI_Analysis_long.Tread$Race_Combined)
+
+AI_Analysis_long.Tread$Race_Combined <- factor(AI_Analysis_long.Tread$Race_Combined,
+                                               levels = c("Caucasian", "Black", "Mexican-American", "Other", "Asian" ))
+
+
+# Get unique pairs
+pairs <- unique(AI_Analysis_long.Tread$Pair)
+
+results_df.Tread <- data.frame()
+
+
+# Loop through each pair
+for(current_pair in pairs) {
+  # Subset data for current pair
+  pair_data <- filter(AI_Analysis_long.Tread, Pair == current_pair)
+  
+  # Fit the model
+  model <- lm(AI ~ gender +  bmi + age + Race_Combined, data = pair_data)
+  
+  #check model
+  check_model(model)
+  
+  # Get model summary
+  model_summary <- summary(model)
+  
+  # Extract coefficients and p-values
+  coef_data <- data.frame(
+    Pair = current_pair,
+    Term = rownames(model_summary$coefficients),
+    Estimate = model_summary$coefficients[,1],
+    Std_Error = model_summary$coefficients[,2],
+    t_value = model_summary$coefficients[,3],
+    p_value = model_summary$coefficients[,4]
+  )
+  
+  # Add model fit statistics
+  coef_data$R_squared <- model_summary$r.squared
+  coef_data$Adj_R_squared <- model_summary$adj.r.squared
+  coef_data$F_statistic <- model_summary$fstatistic[1]
+  coef_data$F_p_value <- pf(model_summary$fstatistic[1], 
+                            model_summary$fstatistic[2], 
+                            model_summary$fstatistic[3], 
+                            lower.tail = FALSE)
+  
+  # Append to results dataframe
+  results_df.Tread <- rbind(results_df.Tread, coef_data)
+}
+
+
+
+# Round numeric columns to 4 decimal places
+results_df.Tread <- results_df.Tread %>%
+  mutate(across(where(is.numeric), ~round(., 4)))
+
+# Print the results
+print(results_df.Tread)
+
+results_df.Tread <- results_df.Tread %>% 
+  filter(Term != "(Intercept)")
+
+results_df.Tread_2 <- results_df.Tread %>% 
+  select(
+    Pair,
+    p_value,
+    Term,
+    Estimate
+  ) %>% 
+  pivot_wider(
+    names_from = Term,
+    values_from = c(Estimate, p_value)
+  )
+
+results_df.Tread_2 <- results_df.Tread_2 %>% 
+  select(
+    Pair,
+    Estimate_age,
+    Estimate_bmi,
+    Estimate_gender2,
+    Estimate_Race_CombinedBlack,
+    "Estimate_Race_CombinedMexican-American",
+    Estimate_Race_CombinedAsian,
+    Estimate_Race_CombinedOther,
+    p_value_age,
+    p_value_bmi,
+    p_value_gender2,
+    p_value_Race_CombinedBlack,
+    "p_value_Race_CombinedMexican-American",
+    p_value_Race_CombinedAsian,
+    p_value_Race_CombinedOther
+  )
+
+# Save results to CSV
+write.csv(results_df.Tread_2, "TREAD_Uncorrected.csv", row.names = FALSE)
+
+
+results_df.Tread %>% 
+  filter(p_value < 0.05) %>% 
+  group_by(Term) %>% 
+  summarise(count = n(), avg = mean(abs(Estimate)))
+
+
+#### Bike only #####
+
+
+AI_Analysis_long.Bike$Pair <- factor(AI_Analysis_long.Bike$Pair)
+AI_Analysis_long.Bike$Race_Combined <- factor(AI_Analysis_long.Bike$Race_Combined)
+
+
+levels(AI_Analysis_long.Bike$Race_Combined)
+
+AI_Analysis_long.Bike$Race_Combined <- factor(AI_Analysis_long.Bike$Race_Combined,
+                                              levels = c("Caucasian", "Black", "Mexican-American", "Other", "Asian" ))
+
+
+# Get unique pairs
+pairs <- unique(AI_Analysis_long.Bike$Pair)
+
+results_df.Bike <- data.frame()
+
+
+# Loop through each pair
+for(current_pair in pairs) {
+  # Subset data for current pair
+  pair_data <- filter(AI_Analysis_long.Bike, Pair == current_pair)
+  
+  # Fit the model
+  model <- lm(AI ~ gender +  bmi + age + Race_Combined, data = pair_data)
+  
+  #check model
+  check_model(model)
+  
+  # Get model summary
+  model_summary <- summary(model)
+  
+  # Extract coefficients and p-values
+  coef_data <- data.frame(
+    Pair = current_pair,
+    Term = rownames(model_summary$coefficients),
+    Estimate = model_summary$coefficients[,1],
+    Std_Error = model_summary$coefficients[,2],
+    t_value = model_summary$coefficients[,3],
+    p_value = model_summary$coefficients[,4]
+  )
+  
+  # Add model fit statistics
+  coef_data$R_squared <- model_summary$r.squared
+  coef_data$Adj_R_squared <- model_summary$adj.r.squared
+  coef_data$F_statistic <- model_summary$fstatistic[1]
+  coef_data$F_p_value <- pf(model_summary$fstatistic[1], 
+                            model_summary$fstatistic[2], 
+                            model_summary$fstatistic[3], 
+                            lower.tail = FALSE)
+  
+  # Append to results dataframe
+  results_df.Bike <- rbind(results_df.Bike, coef_data)
+}
+
+
+
+# Round numeric columns to 4 decimal places
+results_df.Bike <- results_df.Bike %>%
+  mutate(across(where(is.numeric), ~round(., 4)))
+
+# Print the results
+print(results_df.Bike)
+
+results_df.Bike <- results_df.Bike %>% 
+  filter(Term != "(Intercept)")
+
+results_df.Bike_2 <- results_df.Bike %>% 
+  select(
+    Pair,
+    p_value,
+    Term,
+    Estimate
+  ) %>% 
+  pivot_wider(
+    names_from = Term,
+    values_from = c(Estimate, p_value)
+  )
+
+results_df.Bike_2 <- results_df.Bike_2 %>% 
+  select(
+    Pair,
+    Estimate_age,
+    Estimate_bmi,
+    Estimate_gender2,
+    Estimate_Race_CombinedBlack,
+    "Estimate_Race_CombinedMexican-American",
+    Estimate_Race_CombinedAsian,
+    Estimate_Race_CombinedOther,
+    p_value_age,
+    p_value_bmi,
+    p_value_gender2,
+    p_value_Race_CombinedBlack,
+    "p_value_Race_CombinedMexican-American",
+    p_value_Race_CombinedAsian,
+    p_value_Race_CombinedOther
+  )
+
+# Save results to CSV
+write.csv(results_df.Bike_2, "Bike_Uncorrected.csv", row.names = FALSE)
+
+
+results_df.Bike %>% 
+  filter(p_value < 0.05) %>% 
+  group_by(Term) %>% 
+  summarise(count = n(), avg = mean(abs(Estimate)))
+
+
+#### Bike only Corrected ###########
+
+
+AI_Analysis_long.BikeCorrected$Pair <- factor(AI_Analysis_long.BikeCorrected$Pair)
+AI_Analysis_long.BikeCorrected$Race_Combined <- factor(AI_Analysis_long.BikeCorrected$Race_Combined)
+
+
+levels(AI_Analysis_long.BikeCorrected$Race_Combined)
+
+AI_Analysis_long.BikeCorrected$Race_Combined <- factor(AI_Analysis_long.BikeCorrected$Race_Combined,
+                                              levels = c("Caucasian", "Black", "Mexican-American", "Other", "Asian" ))
+
+
+# Get unique pairs
+pairs <- unique(AI_Analysis_long.BikeCorrected$Pair)
+
+results_df.BikeCorrected <- data.frame()
+
+
+# Loop through each pair
+for(current_pair in pairs) {
+  # Subset data for current pair
+  pair_data <- filter(AI_Analysis_long.BikeCorrected, Pair == current_pair)
+  
+  # Fit the model
+  model <- lm(AI ~ gender +  bmi + age + Race_Combined, data = pair_data)
+  
+  #check model
+  check_model(model)
+  
+  # Get model summary
+  model_summary <- summary(model)
+  
+  # Extract coefficients and p-values
+  coef_data <- data.frame(
+    Pair = current_pair,
+    Term = rownames(model_summary$coefficients),
+    Estimate = model_summary$coefficients[,1],
+    Std_Error = model_summary$coefficients[,2],
+    t_value = model_summary$coefficients[,3],
+    p_value = model_summary$coefficients[,4]
+  )
+  
+  # Add model fit statistics
+  coef_data$R_squared <- model_summary$r.squared
+  coef_data$Adj_R_squared <- model_summary$adj.r.squared
+  coef_data$F_statistic <- model_summary$fstatistic[1]
+  coef_data$F_p_value <- pf(model_summary$fstatistic[1], 
+                            model_summary$fstatistic[2], 
+                            model_summary$fstatistic[3], 
+                            lower.tail = FALSE)
+  
+  # Append to results dataframe
+  results_df.BikeCorrected <- rbind(results_df.BikeCorrected, coef_data)
+}
+
+
+
+# Round numeric columns to 4 decimal places
+results_df.BikeCorrected <- results_df.BikeCorrected %>%
+  mutate(across(where(is.numeric), ~round(., 4)))
+
+# Print the results
+print(results_df.BikeCorrected)
+
+results_df.BikeCorrected <- results_df.BikeCorrected %>% 
+  filter(Term != "(Intercept)")
+
+results_df.BikeCorrected_2 <- results_df.BikeCorrected %>% 
+  select(
+    Pair,
+    p_value,
+    Term,
+    Estimate
+  ) %>% 
+  pivot_wider(
+    names_from = Term,
+    values_from = c(Estimate, p_value)
+  )
+
+results_df.BikeCorrected_2 <- results_df.BikeCorrected_2 %>% 
+  select(
+    Pair,
+    Estimate_age,
+    Estimate_bmi,
+    Estimate_gender2,
+    Estimate_Race_CombinedBlack,
+    "Estimate_Race_CombinedMexican-American",
+    Estimate_Race_CombinedAsian,
+    Estimate_Race_CombinedOther,
+    p_value_age,
+    p_value_bmi,
+    p_value_gender2,
+    p_value_Race_CombinedBlack,
+    "p_value_Race_CombinedMexican-American",
+    p_value_Race_CombinedAsian,
+    p_value_Race_CombinedOther
+  )
+
+# Save results to CSV
+write.csv(results_df.BikeCorrected_2, "Bike_Corrected.csv", row.names = FALSE)
+
+
+results_df.BikeCorrected %>% 
+  filter(p_value < 0.05) %>% 
+  group_by(Term) %>% 
+  summarise(count = n(), avg = mean(abs(Estimate)))
+
+
+#TREAD Corrected #####
+
+AI_Analysis_long.TreadCorrected$Pair <- factor(AI_Analysis_long.TreadCorrected$Pair)
+AI_Analysis_long.TreadCorrected$Race_Combined <- factor(AI_Analysis_long.TreadCorrected$Race_Combined)
+
+
+levels(AI_Analysis_long.TreadCorrected$Race_Combined)
+
+AI_Analysis_long.TreadCorrected$Race_Combined <- factor(AI_Analysis_long.TreadCorrected$Race_Combined,
+                                                       levels = c("Caucasian", "Black", "Mexican-American", "Other", "Asian" ))
+
+
+# Get unique pairs
+pairs <- unique(AI_Analysis_long.TreadCorrected$Pair)
+
+results_df.TreadCorrected <- data.frame()
+
+
+# Loop through each pair
+for(current_pair in pairs) {
+  # Subset data for current pair
+  pair_data <- filter(AI_Analysis_long.TreadCorrected, Pair == current_pair)
+  
+  # Fit the model
+  model <- lm(AI ~ gender +  bmi + age + Race_Combined, data = pair_data)
+  
+  #check model
+  check_model(model)
+  
+  # Get model summary
+  model_summary <- summary(model)
+  
+  # Extract coefficients and p-values
+  coef_data <- data.frame(
+    Pair = current_pair,
+    Term = rownames(model_summary$coefficients),
+    Estimate = model_summary$coefficients[,1],
+    Std_Error = model_summary$coefficients[,2],
+    t_value = model_summary$coefficients[,3],
+    p_value = model_summary$coefficients[,4]
+  )
+  
+  # Add model fit statistics
+  coef_data$R_squared <- model_summary$r.squared
+  coef_data$Adj_R_squared <- model_summary$adj.r.squared
+  coef_data$F_statistic <- model_summary$fstatistic[1]
+  coef_data$F_p_value <- pf(model_summary$fstatistic[1], 
+                            model_summary$fstatistic[2], 
+                            model_summary$fstatistic[3], 
+                            lower.tail = FALSE)
+  
+  # Append to results dataframe
+  results_df.TreadCorrected <- rbind(results_df.TreadCorrected, coef_data)
+}
+
+
+
+# Round numeric columns to 4 decimal places
+results_df.TreadCorrected <- results_df.TreadCorrected %>%
+  mutate(across(where(is.numeric), ~round(., 4)))
+
+# Print the results
+print(results_df.TreadCorrected)
+
+results_df.TreadCorrected <- results_df.TreadCorrected %>% 
+  filter(Term != "(Intercept)")
+
+results_df.TreadCorrected_2 <- results_df.TreadCorrected %>% 
+  select(
+    Pair,
+    p_value,
+    Term,
+    Estimate
+  ) %>% 
+  pivot_wider(
+    names_from = Term,
+    values_from = c(Estimate, p_value)
+  )
+
+results_df.TreadCorrected_2 <- results_df.TreadCorrected_2 %>% 
+  select(
+    Pair,
+    Estimate_age,
+    Estimate_bmi,
+    Estimate_gender2,
+    Estimate_Race_CombinedBlack,
+    "Estimate_Race_CombinedMexican-American",
+    Estimate_Race_CombinedAsian,
+    Estimate_Race_CombinedOther,
+    p_value_age,
+    p_value_bmi,
+    p_value_gender2,
+    p_value_Race_CombinedBlack,
+    "p_value_Race_CombinedMexican-American",
+    p_value_Race_CombinedAsian,
+    p_value_Race_CombinedOther
+  )
+
+# Save results to CSV
+write.csv(results_df.TreadCorrected_2, "Tread_Corrected.csv", row.names = FALSE)
+
+
+results_df.TreadCorrected %>% 
+  filter(p_value < 0.05) %>% 
+  group_by(Term) %>% 
+  summarise(count = n(), avg = mean(abs(Estimate)))
+
+
+
+
+##### Variability Model Corrected ######
+
+AccessCPET_Corrected <- AccessCPET_Corrected %>% 
+  mutate(
+    Variability_FvW = (FRIEND_Percent.Predicted - Wasserman_Percent.Predicted),
+    Variability_FvH = (FRIEND_Percent.Predicted - Hansen_Percent.Predicted),
+    Variability_FvB = (FRIEND_Percent.Predicted - Bruce_Percent.Predicted),
+    Variability_FvJ = (FRIEND_Percent.Predicted - Jones_Percent.Predicted),
+    Variability_FvN = (FRIEND_Percent.Predicted - Neder_Percent.Predicted),
+    
+    Variability_WvH = (Wasserman_Percent.Predicted - Hansen_Percent.Predicted),
+    Variability_WvB = (Wasserman_Percent.Predicted - Bruce_Percent.Predicted),
+    Variability_WvJ = (Wasserman_Percent.Predicted - Jones_Percent.Predicted),
+    Variability_WvN = (Wasserman_Percent.Predicted - Neder_Percent.Predicted),
+    
+    Variability_HvB = (Hansen_Percent.Predicted - Bruce_Percent.Predicted),
+    Variability_HvJ = (Hansen_Percent.Predicted - Jones_Percent.Predicted),
+    Variability_HvN = (Hansen_Percent.Predicted - Neder_Percent.Predicted),
+    
+    Variability_BvJ = (Bruce_Percent.Predicted - Jones_Percent.Predicted),
+    Variability_BvN = (Bruce_Percent.Predicted - Neder_Percent.Predicted),
+    
+    Variability_JvN = (Jones_Percent.Predicted - Neder_Percent.Predicted)
+  )
+
+AccessCPET_Corrected %>% 
+  select(
+    "Variability_FvW", "Variability_FvH","Variability_FvB" , "Variability_FvJ",  "Variability_FvN",  "Variability_WvH", "Variability_WvB", "Variability_WvJ", "Variability_WvN", "Variability_HvB", "Variability_HvJ" , "Variability_HvN" ,"Variability_BvJ", "Variability_BvN","Variability_JvN") %>% 
+  tbl_summary(
+    digits = all_continuous() ~ 2
+  ) 
+
+Variability_Analysis <- AccessCPET_Corrected %>% 
+  select(
+    Subject_ID,
+    gender,
+    Mode,
+    age,
+    bmi,
+    Race_Combined,
+    "Variability_FvW", "Variability_FvH","Variability_FvB" , "Variability_FvJ",  "Variability_FvN",  "Variability_WvH", "Variability_WvB", "Variability_WvJ", 
+    "Variability_WvN", "Variability_HvB", "Variability_HvJ" , "Variability_HvN" ,"Variability_BvJ", "Variability_BvN","Variability_JvN") 
+
+# Making a long version
+
+Variability_Analysis_long <- Variability_Analysis %>% 
+  pivot_longer(
+    cols = c(    "Variability_FvW", "Variability_FvH","Variability_FvB" , "Variability_FvJ",  "Variability_FvN",  "Variability_WvH", "Variability_WvB", "Variability_WvJ", 
+                 "Variability_WvN", "Variability_HvB", "Variability_HvJ" , "Variability_HvN" ,"Variability_BvJ", "Variability_BvN","Variability_JvN"),
+    names_to = c(".value", "Pair"),
+    names_sep = "_"
+  )
+
+# Variabilty plots
+Variability_Analysis_long %>% 
+  ggplot() +
+  geom_histogram(aes(x = Variability))
+
+Variability_Analysis_long %>% 
+  ggplot(aes(x = Variability, y = age, color= Pair)) +
+  geom_jitter() + 
+  geom_smooth(method = "lm") +
+  facet_wrap(~Pair)
+
+Variability_Analysis_long %>% 
+  ggplot(aes(x = Variability, y = gender, color= Pair)) +
+  geom_jitter() + 
+  geom_smooth(method = "lm") +
+  facet_wrap(~Pair)
+
+Variability_Analysis_long %>% 
+  ggplot(aes(x = Variability, y = Race_Combined, color= Pair)) +
+  geom_jitter() + 
+  geom_smooth(method = "lm") +
+  facet_wrap(~Pair)
+
+
+#running models
+
+
+
+Variability_Analysis_long$Pair <- factor(Variability_Analysis_long$Pair)
+Variability_Analysis_long$Race_Combined <- factor(Variability_Analysis_long$Race_Combined)
+
+
+levels(Variability_Analysis_long$Race_Combined)
+
+Variability_Analysis_long$Race_Combined <- factor(Variability_Analysis_long$Race_Combined,
+                                                  levels = c("Caucasian", "Black", "Other", "Asian" ))
+
+
+# Get unique pairs
+pairs <- unique(Variability_Analysis_long$Pair)
+
+results_df.Var <- data.frame()
+
+
+# Loop through each pair
+for(current_pair in pairs) {
+  # Subset data for current pair
+  pair_data <- filter(Variability_Analysis_long, Pair == current_pair)
+  
+  # Fit the model
+  model <- lm(Variability ~ gender + Mode + bmi + age + Race_Combined, data = pair_data)
+  
+  #check model
+  check_model(model)
+  
+  # Get model summary
+  model_summary <- summary(model)
+  
+  # Extract coefficients and p-values
+  coef_data <- data.frame(
+    Pair = current_pair,
+    Term = rownames(model_summary$coefficients),
+    Estimate = model_summary$coefficients[,1],
+    Std_Error = model_summary$coefficients[,2],
+    t_value = model_summary$coefficients[,3],
+    p_value = model_summary$coefficients[,4]
+  )
+  
+  # Add model fit statistics
+  coef_data$R_squared <- model_summary$r.squared
+  coef_data$Adj_R_squared <- model_summary$adj.r.squared
+  coef_data$F_statistic <- model_summary$fstatistic[1]
+  coef_data$F_p_value <- pf(model_summary$fstatistic[1], 
+                            model_summary$fstatistic[2], 
+                            model_summary$fstatistic[3], 
+                            lower.tail = FALSE)
+  
+  # Append to results dataframe
+  results_df.Var <- rbind(results_df.Var, coef_data)
+}
+
+
+
+# Round numeric columns to 4 decimal places
+results_df.Var <- results_df.Var %>%
+  mutate(across(where(is.numeric), ~round(., 4)))
+
+# Print the results
+print(results_df.Var)
+
+results_df.Var <- results_df.Var %>% 
+  filter(Term != "(Intercept)")
+
+results_df.Var_2 <- results_df.Var %>% 
+  select(
+    Pair,
+    p_value,
+    Term,
+    Estimate
+  ) %>% 
+  pivot_wider(
+    names_from = Term,
+    values_from = c(Estimate, p_value)
+  )
+
+results_df.Var_2 <- results_df.Var_2 %>% 
+  select(
+    Pair,
+    Estimate_age,
+    Estimate_bmi,
+    Estimate_gender2,
+    Estimate_ModeTreadmill,
+    Estimate_Race_CombinedBlack,
+    Estimate_Race_CombinedAsian,
+    Estimate_Race_CombinedOther,
+    p_value_age,
+    p_value_bmi,
+    p_value_gender2,   
+    p_value_ModeTreadmill,
+    p_value_Race_CombinedBlack,
+    p_value_Race_CombinedAsian,
+    p_value_Race_CombinedOther
+  )
+
+# Save results to CSV
+write.csv(results_df.Var_2, "model_summary_Var_withMode.csv", row.names = FALSE)
+
+
+results_df.Var %>% 
+  filter(p_value < 0.05) %>% 
+  group_by(Term) %>% 
+  summarise(count = n(), avg = mean(abs(Estimate)))
+
+
+##### Variability Model Uncorrected ######
+
+
+AccessCPET_Uncorrected <- AccessCPET_Uncorrected %>% 
+  mutate(
+    Variability_FvW = (FRIEND_Percent.Predicted - Wasserman_Percent.Predicted),
+    Variability_FvH = (FRIEND_Percent.Predicted - Hansen_Percent.Predicted),
+    Variability_FvB = (FRIEND_Percent.Predicted - Bruce_Percent.Predicted),
+    Variability_FvJ = (FRIEND_Percent.Predicted - Jones_Percent.Predicted),
+    Variability_FvN = (FRIEND_Percent.Predicted - Neder_Percent.Predicted),
+    
+    Variability_WvH = (Wasserman_Percent.Predicted - Hansen_Percent.Predicted),
+    Variability_WvB = (Wasserman_Percent.Predicted - Bruce_Percent.Predicted),
+    Variability_WvJ = (Wasserman_Percent.Predicted - Jones_Percent.Predicted),
+    Variability_WvN = (Wasserman_Percent.Predicted - Neder_Percent.Predicted),
+    
+    Variability_HvB = (Hansen_Percent.Predicted - Bruce_Percent.Predicted),
+    Variability_HvJ = (Hansen_Percent.Predicted - Jones_Percent.Predicted),
+    Variability_HvN = (Hansen_Percent.Predicted - Neder_Percent.Predicted),
+    
+    Variability_BvJ = (Bruce_Percent.Predicted - Jones_Percent.Predicted),
+    Variability_BvN = (Bruce_Percent.Predicted - Neder_Percent.Predicted),
+    
+    Variability_JvN = (Jones_Percent.Predicted - Neder_Percent.Predicted)
+  )
+
+AccessCPET_Uncorrected %>% 
+  select(
+    "Variability_FvW", "Variability_FvH","Variability_FvB" , "Variability_FvJ",  "Variability_FvN",  "Variability_WvH", "Variability_WvB", "Variability_WvJ", "Variability_WvN", "Variability_HvB", "Variability_HvJ" , "Variability_HvN" ,"Variability_BvJ", "Variability_BvN","Variability_JvN") %>% 
+  tbl_summary(
+    digits = all_continuous() ~ 2
+  ) 
+
+Variability_Analysis_Unc <- AccessCPET_Uncorrected %>% 
+  select(
+    Subject_ID,
+    gender,
+    Mode,
+    age,
+    bmi,
+    Race_Combined = Race_Combined,
+    "Variability_FvW", "Variability_FvH","Variability_FvB" , "Variability_FvJ",  "Variability_FvN",  "Variability_WvH", "Variability_WvB", "Variability_WvJ", 
+    "Variability_WvN", "Variability_HvB", "Variability_HvJ" , "Variability_HvN" ,"Variability_BvJ", "Variability_BvN","Variability_JvN") 
+
+# Making a long version
+
+Variability_Analysis_Unc_long <- Variability_Analysis_Unc %>% 
+  pivot_longer(
+    cols = c(    "Variability_FvW", "Variability_FvH","Variability_FvB" , "Variability_FvJ",  "Variability_FvN",  "Variability_WvH", "Variability_WvB", "Variability_WvJ", 
+                 "Variability_WvN", "Variability_HvB", "Variability_HvJ" , "Variability_HvN" ,"Variability_BvJ", "Variability_BvN","Variability_JvN"),
+    names_to = c(".value", "Pair"),
+    names_sep = "_"
+  )
+
+# Variabilty plots
+Variability_Analysis_Unc_long %>% 
+  ggplot() +
+  geom_histogram(aes(x = Variability))
+
+Variability_Analysis_Unc_long %>% 
+  ggplot(aes(x = Variability, y = age, color= Pair)) +
+  geom_jitter() + 
+  geom_smooth(method = "lm") +
+  facet_wrap(~Pair)
+
+Variability_Analysis_Unc_long %>% 
+  ggplot(aes(x = Variability, y = gender, color= Pair)) +
+  geom_jitter() + 
+  geom_smooth(method = "lm") +
+  facet_wrap(~Pair)
+
+Variability_Analysis_Unc_long %>% 
+  ggplot(aes(x = Variability, y = Race_Combined, color= Pair)) +
+  geom_jitter() + 
+  geom_smooth(method = "lm") +
+  facet_wrap(~Pair)
+
+
+#running models
+
+
+
+Variability_Analysis_Unc_long$Pair <- factor(Variability_Analysis_Unc_long$Pair)
+Variability_Analysis_Unc_long$Race_Combined <- factor(Variability_Analysis_Unc_long$Race_Combined)
+
+
+levels(Variability_Analysis_Unc_long$Race_Combined)
+
+Variability_Analysis_Unc_long$Race_Combined <- factor(Variability_Analysis_Unc_long$Race_Combined,
+                                                  levels = c("Caucasian", "Black", "Other", "Asian" ))
+
+
+# Get unique pairs
+pairs <- unique(Variability_Analysis_Unc_long$Pair)
+
+results_df.VarUnc <- data.frame()
+
+
+# Loop through each pair
+for(current_pair in pairs) {
+  # Subset data for current pair
+  pair_data <- filter(Variability_Analysis_Unc_long, Pair == current_pair)
+  
+  # Fit the model
+  model <- lm(Variability ~ gender + Mode + bmi + age + Race_Combined, data = pair_data)
+  
+  #check model
+  check_model(model)
+  
+  # Get model summary
+  model_summary <- summary(model)
+  
+  # Extract coefficients and p-values
+  coef_data <- data.frame(
+    Pair = current_pair,
+    Term = rownames(model_summary$coefficients),
+    Estimate = model_summary$coefficients[,1],
+    Std_Error = model_summary$coefficients[,2],
+    t_value = model_summary$coefficients[,3],
+    p_value = model_summary$coefficients[,4]
+  )
+  
+  # Add model fit statistics
+  coef_data$R_squared <- model_summary$r.squared
+  coef_data$Adj_R_squared <- model_summary$adj.r.squared
+  coef_data$F_statistic <- model_summary$fstatistic[1]
+  coef_data$F_p_value <- pf(model_summary$fstatistic[1], 
+                            model_summary$fstatistic[2], 
+                            model_summary$fstatistic[3], 
+                            lower.tail = FALSE)
+  
+  # Append to results dataframe
+  results_df.VarUnc <- rbind(results_df.VarUnc, coef_data)
+}
+
+
+
+# Round numeric columns to 4 decimal places
+results_df.VarUnc <- results_df.VarUnc %>%
+  mutate(across(where(is.numeric), ~round(., 4)))
+
+# Print the results
+print(results_df.VarUnc)
+
+results_df.VarUnc <- results_df.VarUnc %>% 
+  filter(Term != "(Intercept)")
+
+results_df.Var_2Unc <- results_df.VarUnc %>% 
+  select(
+    Pair,
+    p_value,
+    Term,
+    Estimate
+  ) %>% 
+  pivot_wider(
+    names_from = Term,
+    values_from = c(Estimate, p_value)
+  )
+
+results_df.Var_2Unc <- results_df.Var_2Unc %>% 
+  select(
+    Pair,
+    Estimate_age,
+    Estimate_bmi,
+    Estimate_gender2,
+    Estimate_ModeTreadmill,
+    Estimate_Race_CombinedBlack,
+    Estimate_Race_CombinedAsian,
+    Estimate_Race_CombinedOther,
+    p_value_age,
+    p_value_bmi,
+    p_value_gender2,   
+    p_value_ModeTreadmill,
+    p_value_Race_CombinedBlack,
+    p_value_Race_CombinedAsian,
+    p_value_Race_CombinedOther
+  )
+
+# Save results to CSV
+write.csv(results_df.Var_2Unc, "VarUnc_withMode.csv", row.names = FALSE)
+
+
+results_df.VarUnc %>% 
+  filter(p_value < 0.05) %>% 
+  group_by(Term) %>% 
+  summarise(count = n(), avg = mean(abs(Estimate)))
