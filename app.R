@@ -10,6 +10,10 @@ library(ggrepel)
 library(plotly)
 library(highcharter)
 library(directlabels)
+library(rmarkdown) 
+
+
+
 
 # Configure RStudio Connect account
 rsconnect::setAccountInfo(
@@ -17,6 +21,942 @@ rsconnect::setAccountInfo(
   token = '0C459DADC38DE42C7AE2B7A40C558D21',
   secret = '0N2+uwnG1hKyr8eFEchrcpPg0Cg/bUf0ZOpI6mlS'
 )
+
+
+###### Functions for plot:
+
+## FREIND
+
+# Plotting code for Friend equation
+
+generateComparisonplot <- function(results){
+  
+  # progress bar with Percent predicted    
+  
+  data <- results %>% 
+    select(
+      Friend_pp,
+      Wasserman_pp,
+      Hansen_pp,
+      Bruce_pp,
+      Jones2_pp,
+      Neder_pp
+    ) %>% 
+    rename(
+      FRIEND = Friend_pp,
+      Wasserman = Wasserman_pp,
+      Hansen = Hansen_pp,
+      Bruce = Bruce_pp,
+      Jones = Jones2_pp,
+      Neder = Neder_pp
+    )
+  
+  data_long <- data %>% 
+    pivot_longer(
+      cols = c("FRIEND", "Wasserman", "Hansen", "Bruce", "Jones", "Neder"),
+      names_to = "Equation",
+      values_to = "Percent"
+    )
+  
+  data_long$Percent <- round(data_long$Percent, digits = 0)
+  
+  
+  p <- data_long %>% 
+    ggplot() +
+    geom_col(aes(x = Equation, y = 100), fill = I("lightgrey"), alpha = 0.5) +
+    geom_col(aes(x = Equation, y = Percent, fill = Percent)) +
+    scale_fill_gradient2(low = "red", mid = "yellow", high = "green", midpoint = 75) +
+    geom_text(aes(x = Equation, y = Percent, label = paste0(Percent, "%")), vjust = -0.5, color = "black", fontface = "bold") +
+    labs(title = "Percent Predicted VO2 Max",
+         x = "Equation",
+         y = "Percent Predicted (%)") +
+    theme_minimal() +
+    theme(
+      legend.position = "none" ,
+      axis.title.x = element_blank(),
+      axis.title.y = element_blank(),
+      axis.text =  element_text(face = "bold", size = 12),
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      axis.ticks.y = element_blank()) +
+    coord_flip()  # Optional: Flips the axes for a horizontal bar plot
+  
+  
+  
+  return(p)
+  
+}
+generateFriendPlot <- function(input, plot_type = c("interactive", "static")) {
+  
+  data <- data.frame(
+    weight_assumed_kg = seq(from = 50, to = 150, by = 1),
+    gender = input$gender,
+    Mode = input$mode,
+    weight_kg = input$weight,
+    height_cm = input$height,
+    age = input$age,
+    age_Plus5= input$age + 5,
+    age_Plus10= input$age + 10,
+    age_Plus15= input$age + 15,
+    age_Minus5= input$age - 5,
+    age_Minus10= input$age - 10,
+    age_Minus15= input$age - 15,
+    measured_VO2 = input$measuredVO2
+  )
+  
+  data <- data %>%
+    mutate(
+      slider_weight = input$SliderBMI * ((height_cm/100) * (height_cm/100)))
+  
+  # Convert weight and height to lbs and inches for FRIEND equation
+  data <- data %>%
+    mutate(
+      weight_lbs = weight_kg * 2.20462,
+      height_in = height_cm / 2.54,
+      weight_ideal = case_when(
+        gender == "Male" ~ 0.79 * height_cm - 60.7,
+        gender == "Female" ~ 0.65 * height_cm - 42.8,
+        TRUE ~ NA_real_
+      ),
+      cycle_factor = case_when(
+        gender == "Male" ~ 50.72 - 0.372 * age,
+        gender == "Female" ~ 22.78 - 0.17 * age,
+        TRUE ~ NA_real_
+      )
+    )
+  
+  
+  data <- data %>% 
+    pivot_longer(
+      cols = c(age, age_Plus5, age_Plus10, age_Plus15, age_Minus5, age_Minus10,age_Minus15),
+      names_to = "Age_Group",
+      values_to = "age"
+    )
+  
+  
+  data <- data %>%
+    mutate(
+      VO2_peak_assumed = case_when(
+        gender == "Male" & Mode == "Bike" ~ (45.2 - (0.35 * age) - (10.9 * 1) - (0.15 * (weight_assumed_kg * 2.20462) ) + (0.68 * height_in) - (0.46 * 2)) * weight_assumed_kg,
+        gender == "Female" & Mode == "Bike" ~ (45.2 - (0.35 * age) - (10.9 * 2) - (0.15 * (weight_assumed_kg * 2.20462)) + (0.68 * height_in) - (0.46 * 2)) * weight_assumed_kg,
+        gender == "Male" & Mode == "Treadmill" ~ (45.2 - (0.35 * age) - (10.9 * 1) - (0.15 * (weight_assumed_kg * 2.20462)) + (0.68 * height_in) - (0.46 * 1)) * weight_assumed_kg,
+        gender == "Female" & Mode == "Treadmill" ~ (45.2 - (0.35 * age) - (10.9 * 2) - (0.15 * (weight_assumed_kg * 2.20462)) + (0.68 * height_in) - (0.46 * 1)) * weight_assumed_kg,
+        TRUE ~ NA_real_),
+      
+      
+      VO2_peak_ideal = case_when(
+        gender == "Male" & Mode == "Bike" ~ (45.2 - (0.35 * age) - (10.9 * 1) - (0.15 * (2.20462  * weight_ideal)) + (0.68 * height_in) - (0.46 * 2)) * weight_ideal,
+        gender == "Female" & Mode == "Bike" ~ (45.2 - (0.35 * age) - (10.9 * 2) - (0.15 * (2.20462  * weight_ideal)) + (0.68 * height_in) - (0.46 * 2)) * weight_ideal,
+        gender == "Male" & Mode == "Treadmill" ~ (45.2 - (0.35 * age) - (10.9 * 1) - (0.15 * (2.20462  * weight_ideal)) + (0.68 * height_in) - (0.46 * 1)) * weight_ideal,
+        gender == "Female" & Mode == "Treadmill" ~ (45.2 - (0.35 * age) - (10.9 * 2) - (0.15 * (2.20462  * weight_ideal)) + (0.68 * height_in) - (0.46 * 1)) * weight_ideal,
+        TRUE ~ NA_real_),
+      
+      VO2_peak_actual = case_when(
+        gender == "Male" & Mode == "Bike" ~ (45.2 - (0.35 * age) - (10.9 * 1) - (0.15 * weight_lbs) + (0.68 * height_in) - (0.46 * 2)) * weight_kg,
+        gender == "Female" & Mode == "Bike" ~ (45.2 - (0.35 * age) - (10.9 * 2) - (0.15 * weight_lbs) + (0.68 * height_in) - (0.46 * 2)) * weight_kg,
+        gender == "Male" & Mode == "Treadmill" ~ (45.2 - (0.35 * age) - (10.9 * 1) - (0.15 * weight_lbs) + (0.68 * height_in) - (0.46 * 1)) * weight_kg,
+        gender == "Female" & Mode == "Treadmill" ~ (45.2 - (0.35 * age) - (10.9 * 2) - (0.15 * weight_lbs) + (0.68 * height_in) - (0.46 * 1)) * weight_kg,
+        TRUE ~ NA_real_)
+      
+    )
+  
+  
+  data <- data %>% 
+    mutate(Age_Group = case_when(
+      Age_Group == "age" ~ "Current Age",
+      Age_Group == "age_Plus5" ~ "Age + 5",
+      Age_Group == "age_Plus10" ~ "Age + 10",
+      Age_Group == "age_Plus15" ~ "Age + 15",
+      Age_Group == "age_Minus5"~ "Age - 5",
+      Age_Group == "age_Minus10" ~ "Age - 10",
+      Age_Group == "age_Minus15" ~ "Age - 15"))
+  
+  data$Age_Group <- factor(data$Age_Group, levels = (c("Current Age", "Age + 5", "Age + 10", "Age + 15", "Age - 5", "Age - 10", "Age - 15" )))
+  
+  
+  # Convert to Plotly and specify tooltip information
+  
+  FRIEND_Plot <- ggplot(data) +
+    geom_line(data = filter(data, Age_Group == "Current Age"), aes(x = weight_assumed_kg, y = VO2_peak_assumed, color = Age_Group), linewidth = 1.2) +
+    
+    geom_point(data = filter(data, Age_Group == "Current Age"),
+               aes(x = weight_ideal, y = VO2_peak_ideal,
+                   text = paste("Ideal Weight:", sprintf("%.2f", weight_ideal), "kg<br>VO2 Peak Predicted:",
+                                sprintf("%.2f", VO2_peak_ideal), "mL/min<br>Percent Predicted:",
+                                sprintf("%.2f%%", (measured_VO2 / VO2_peak_ideal * 100)))), color = "red", size = 5) +
+    geom_point(data = filter(data, Age_Group == "Current Age"),
+               aes(x = weight_kg, y = VO2_peak_actual,
+                   text = paste("Measured Weight:", sprintf("%.2f", weight_kg), "kg<br>VO2 Peak Predicted:",
+                                sprintf("%.2f", VO2_peak_actual), "mL/min<br>Percent Predicted:",
+                                sprintf("%.2f%%", (measured_VO2 / VO2_peak_actual * 100)))), color = "blue", size = 5) +
+    
+    geom_line(data = filter(data, Age_Group != "Current Age"), aes(x = weight_assumed_kg, y = VO2_peak_assumed, color = Age_Group), linetype = "dashed") +
+    
+    labs(y = "VO2 Peak Predicted mL/min", x = "Weight (kg)", color = "Age Groups") +
+    geom_vline(xintercept = data$slider_weight, linetype = "dashed", color = "black") +
+    scale_y_continuous(
+      limits = c(1000, 6000),
+      breaks = seq(1000, 6000, by = 1000),  # Major breaks
+      minor_breaks = seq(1500, 5500, by = 1000)
+    ) +
+    theme_grey() +
+    scale_color_manual(values = c(
+      "Current Age" = "black", 
+      "Age + 5"     = "#7AA6DCFF",
+      "Age + 10"    = "#EFC000FF",
+      "Age + 15"    = "#868686FF",
+      "Age - 5"     = "#CD534CFF",
+      "Age - 10"    = "#8F7700FF",
+      "Age - 15"    = "#003C67FF")) +
+    theme(
+      axis.text = element_text(face = "bold", size = 12),
+      axis.title = element_text(face = "bold", size = 14),
+      plot.caption = element_text(size = 12),
+      panel.grid.minor = element_line(size = 0.5, linetype = 'solid', colour = "gray50"),
+      legend.position= "bottom"
+    )
+  
+  
+  
+  
+  if (plot_type == "interactive") {
+    return(plotly::ggplotly(FRIEND_Plot, tooltip = "text", dynamicTicks= TRUE))
+  } else {
+    return(FRIEND_Plot)
+  }
+  
+}
+generateWassermanplot <- function(input , plot_type = c("interactive", "static")){
+  
+  
+  # Plotting code for wesserman equation
+  
+  data <- data.frame(
+    weight_assumed_kg = seq(from = 50, to = 150, by = 1),
+    gender = input$gender,
+    Mode = input$mode,
+    weight_kg = input$weight,
+    height_cm = input$height,
+    age = input$age,
+    age_Plus5= input$age + 5,
+    age_Plus10= input$age + 10,
+    age_Plus15= input$age + 15,
+    age_Minus5= input$age - 5,
+    age_Minus10= input$age - 10,
+    age_Minus15= input$age - 15,
+    measured_VO2 = input$measuredVO2
+  )
+  
+  data <- data %>%
+    mutate(
+      slider_weight = input$SliderBMI * ((height_cm/100) * (height_cm/100)))
+  
+  # Convert weight and height to lbs and inches for FRIEND equation
+  data <- data %>%
+    mutate(
+      weight_lbs = weight_kg * 2.20462,
+      height_in = height_cm / 2.54,
+      weight_ideal = case_when(
+        gender == "Male" ~ 0.79 * height_cm - 60.7,
+        gender == "Female" ~ 0.65 * height_cm - 42.8,
+        TRUE ~ NA_real_
+      ),
+      cycle_factor = case_when(
+        gender == "Male" ~ 50.72 - 0.372 * age,
+        gender == "Female" ~ 22.78 - 0.17 * age,
+        TRUE ~ NA_real_
+      )
+    )
+  
+  data <- data %>% 
+    pivot_longer(
+      cols = c(age, age_Plus5, age_Plus10, age_Plus15, age_Minus5, age_Minus10,age_Minus15),
+      names_to = "Age_Group",
+      values_to = "age"
+    )
+  
+  # corrected for Mode *1.11 if Treadmill
+  data <- data %>%
+    mutate(
+      VO2_peak_assumed = case_when(
+        gender == "Male" & Mode == "Treadmill" ~ ((weight_assumed_kg * (50.72 - (0.372 * age))) * 1.11), 
+        gender == "Female" & Mode == "Treadmill" ~ ((weight_assumed_kg + 42.8) * (22.78 - (0.17 * age)) * 1.11),
+        gender == "Male" & Mode == "Bike" ~ (weight_assumed_kg * (50.72 - (0.372 * age))), 
+        gender == "Female" & Mode == "Bike" ~ (weight_assumed_kg + 42.8) * (22.78 - (0.17 * age)),
+        TRUE ~ NA_real_),
+      
+      
+      VO2_peak_ideal = case_when(
+        gender == "Male" & Mode == "Treadmill" ~ ((weight_ideal * (50.72 - (0.372 * age))) * 1.11), 
+        gender == "Female" & Mode == "Treadmill" ~ ((weight_ideal + 42.8) * (22.78 - (0.17 * age)) * 1.11),
+        gender == "Male" & Mode == "Bike" ~ (weight_ideal * (50.72 - (0.372 * age))), 
+        gender == "Female"& Mode == "Bike" ~ (weight_ideal + 42.8) * (22.78 - (0.17 * age)),
+        TRUE ~ NA_real_),
+      
+      
+      VO2_peak_actual = case_when( #(mL/min)
+        gender == "Male" & Mode == "Treadmill" ~ ((weight_kg * (50.72 - (0.372 * age))) * 1.11), 
+        gender == "Female" & Mode == "Treadmill" ~ ((weight_kg + 42.8) * (22.78 - (0.17 * age)) * 1.11),
+        gender == "Male" & Mode == "Bike" ~ (weight_kg * (50.72 - (0.372 * age))), 
+        gender == "Female" & Mode == "Bike" ~ (weight_kg + 42.8) * (22.78 - (0.17 * age)),
+        TRUE ~ NA_real_)
+      
+    )
+  
+  data <- data %>% 
+    mutate(Age_Group = case_when(
+      Age_Group == "age" ~ "Current Age",
+      Age_Group == "age_Plus5" ~ "Age + 5",
+      Age_Group == "age_Plus10" ~ "Age + 10",
+      Age_Group == "age_Plus15" ~ "Age + 15",
+      Age_Group == "age_Minus5"~ "Age - 5",
+      Age_Group == "age_Minus10" ~ "Age - 10",
+      Age_Group == "age_Minus15" ~ "Age - 15"))
+  
+  data$Age_Group <- factor(data$Age_Group, levels = (c("Current Age", "Age + 5", "Age + 10", "Age + 15", "Age - 5", "Age - 10", "Age - 15" )))
+  
+  
+  
+  wasserman_Plot <-  ggplot(data) +
+    geom_line(data = filter(data, Age_Group == "Current Age"), aes(x = weight_assumed_kg, y = VO2_peak_assumed, color = Age_Group), linewidth = 1.2) +
+    
+    geom_point(data = filter(data, Age_Group == "Current Age"),
+               aes(x = weight_ideal, y = VO2_peak_ideal,
+                   text = paste("Ideal Weight:", sprintf("%.2f", weight_ideal), "kg<br>VO2 Peak Predicted:",
+                                sprintf("%.2f", VO2_peak_ideal), "mL/min<br>Percent Predicted:",
+                                sprintf("%.2f%%", (measured_VO2 / VO2_peak_ideal * 100)))), color = "red", size = 5) +
+    geom_point(data = filter(data, Age_Group == "Current Age"),
+               aes(x = weight_kg, y = VO2_peak_actual,
+                   text = paste("Measured Weight:", sprintf("%.2f", weight_kg), "kg<br>VO2 Peak Predicted:",
+                                sprintf("%.2f", VO2_peak_actual), "mL/min<br>Percent Predicted:",
+                                sprintf("%.2f%%", (measured_VO2 / VO2_peak_actual * 100)))), color = "blue", size = 5) +
+    
+    geom_line(data = filter(data, Age_Group != "Current Age"), aes(x = weight_assumed_kg, y = VO2_peak_assumed, color = Age_Group), linetype = "dashed") +
+    
+    labs(y = "VO2 Peak Predicted mL/min", x = "Weight (kg)", color = "Age Groups") +
+    geom_vline(xintercept = data$slider_weight, linetype = "dashed", color = "black") +
+    scale_y_continuous(
+      limits = c(1000, 6000),
+      breaks = seq(1000, 6000, by = 1000),  # Major breaks
+      minor_breaks = seq(1500, 5500, by = 1000)
+    ) +
+    theme_grey() +
+    scale_color_manual(values = c(
+      "Current Age" = "black", 
+      "Age + 5"     = "#7AA6DCFF",
+      "Age + 10"    = "#EFC000FF",
+      "Age + 15"    = "#868686FF",
+      "Age - 5"     = "#CD534CFF",
+      "Age - 10"    = "#8F7700FF",
+      "Age - 15"    = "#003C67FF")) +
+    theme(
+      axis.text = element_text(face = "bold", size = 12),
+      axis.title = element_text(face = "bold", size = 14),
+      plot.caption = element_text(size = 12),
+      panel.grid.minor = element_line(size = 0.5, linetype = 'solid', colour = "gray50"),
+      legend.position= "bottom"
+    )
+  
+  
+  # Convert to Plotly and specify tooltip information
+  
+  
+  if (plot_type == "interactive") {
+    return(plotly::ggplotly(wasserman_Plot, tooltip = "text", dynamicTicks= TRUE))
+  } else {
+    return(wasserman_Plot)
+  }
+  
+}
+generateHansenplot <- function(input, plot_type = c("interactive", "static")){
+  
+  # Plotting code for Friend equation
+  
+  data <- data.frame(
+    weight_assumed_kg = seq(from = 50, to = 150, by = 1),
+    gender = input$gender,
+    Mode = input$mode,
+    weight_kg = input$weight,
+    height_cm = input$height,
+    age = input$age,
+    age_Plus5= input$age + 5,
+    age_Plus10= input$age + 10,
+    age_Plus15= input$age + 15,
+    age_Minus5= input$age - 5,
+    age_Minus10= input$age - 10,
+    age_Minus15= input$age - 15,
+    measured_VO2 = input$measuredVO2
+  )
+  
+  data <- data %>%
+    mutate(
+      slider_weight = input$SliderBMI * ((height_cm/100) * (height_cm/100)))
+  
+  # Convert weight and height to lbs and inches for FRIEND equation
+  data <- data %>%
+    mutate(
+      weight_lbs = weight_kg * 2.20462,
+      height_in = height_cm / 2.54,
+      weight_ideal = case_when(
+        gender == "Male" ~ 0.79 * height_cm - 60.7,
+        gender == "Female" ~ 0.65 * height_cm - 42.8,
+        TRUE ~ NA_real_
+      )
+    )
+  
+  data <- data %>% 
+    pivot_longer(
+      cols = c(age, age_Plus5, age_Plus10, age_Plus15, age_Minus5, age_Minus10,age_Minus15),
+      names_to = "Age_Group",
+      values_to = "age"
+    )
+  
+  data <- data %>%
+    mutate(cycle_factor = case_when(
+      gender == "Male" ~ 50.72 - 0.372 * age,
+      gender == "Female" ~ 22.78 - 0.17 * age,
+      TRUE ~ NA_real_
+    ))
+  
+  data <- data %>%
+    mutate(
+      VO2_peak_assumed = case_when(
+        gender == "Male" & Mode == "Bike" & weight_assumed_kg < weight_ideal ~ (((weight_ideal + weight_assumed_kg) / 2) * cycle_factor),
+        gender == "Male" & Mode == "Bike" & weight_assumed_kg == weight_ideal ~ (weight_assumed_kg * cycle_factor),
+        gender == "Male" & Mode == "Bike" & weight_assumed_kg > weight_ideal ~ ((weight_ideal * cycle_factor) + 6 * (weight_assumed_kg - weight_ideal)),
+        
+        gender == "Male" & Mode == "Treadmill" & weight_assumed_kg < weight_ideal ~ (((weight_ideal + weight_assumed_kg) / 2) * cycle_factor) * 1.11,
+        gender == "Male" & Mode == "Treadmill" & weight_assumed_kg == weight_ideal ~ (weight_assumed_kg * cycle_factor) * 1.11,
+        gender == "Male" & Mode == "Treadmill" & weight_assumed_kg > weight_ideal ~ ((weight_ideal * cycle_factor) + 6 * (weight_assumed_kg - weight_ideal)) * 1.11,
+        
+        gender == "Female" & Mode == "Bike" & weight_assumed_kg < weight_ideal ~ (((weight_ideal + weight_assumed_kg + 86) / 2) * cycle_factor),
+        gender == "Female" & Mode == "Bike" & weight_assumed_kg == weight_ideal ~ ((weight_assumed_kg + 43) * cycle_factor),
+        gender == "Female" & Mode == "Bike" & weight_assumed_kg > weight_ideal ~ (((weight_ideal + 43) * cycle_factor) + 6 * (weight_assumed_kg - weight_ideal)),
+        
+        gender == "Female" & Mode == "Treadmill" & weight_assumed_kg < weight_ideal ~ (((weight_ideal + weight_assumed_kg + 86) / 2) * cycle_factor) * 1.11,
+        gender == "Female" & Mode == "Treadmill" & weight_assumed_kg == weight_ideal ~ ((weight_assumed_kg + 43) * cycle_factor) * 1.11,
+        gender == "Female" & Mode == "Treadmill" & weight_assumed_kg > weight_ideal ~ (((weight_ideal + 43) * cycle_factor) + 6 * (weight_assumed_kg - weight_ideal)) * 1.11,
+        TRUE ~ NA_real_),
+      
+      
+      VO2_peak_ideal = case_when(
+        gender == "Male" & Mode == "Bike" ~ (weight_ideal * cycle_factor),
+        gender == "Male" & Mode == "Treadmill" ~ (weight_ideal * cycle_factor) * 1.11,
+        
+        gender == "Female" & Mode == "Bike" ~ ((weight_ideal + 43) * cycle_factor),
+        gender == "Female" & Mode == "Treadmill"  ~ ((weight_ideal + 43) * cycle_factor) * 1.11,
+        TRUE ~ NA_real_),
+      
+      
+      VO2_peak_actual = case_when(#(mL/min)
+        gender == "Male" & Mode == "Bike" & weight_kg < weight_ideal ~ (((weight_ideal + weight_kg) / 2) * cycle_factor),
+        gender == "Male" & Mode == "Bike" & weight_kg == weight_ideal ~ (weight_kg * cycle_factor),
+        gender == "Male" & Mode == "Bike" & weight_kg > weight_ideal ~ ((weight_ideal * cycle_factor) + 6 * (weight_kg - weight_ideal)),
+        
+        gender == "Male" & Mode == "Treadmill" & weight_kg < weight_ideal ~ (((weight_ideal + weight_kg) / 2) * cycle_factor) * 1.11,
+        gender == "Male" & Mode == "Treadmill" & weight_kg == weight_ideal ~ (weight_kg * cycle_factor) * 1.11,
+        gender == "Male" & Mode == "Treadmill" & weight_kg > weight_ideal ~ ((weight_ideal * cycle_factor) + 6 * (weight_kg - weight_ideal)) * 1.11,
+        
+        gender == "Female" & Mode == "Bike" & weight_kg < weight_ideal ~ (((weight_ideal + weight_kg + 86) / 2) * cycle_factor),
+        gender == "Female" & Mode == "Bike" & weight_kg == weight_ideal ~ ((weight_kg + 43) * cycle_factor),
+        gender == "Female" & Mode == "Bike" & weight_kg > weight_ideal ~ (((weight_ideal + 43) * cycle_factor) + 6 * (weight_kg - weight_ideal)),
+        
+        gender == "Female" & Mode == "Treadmill" & weight_kg < weight_ideal ~ (((weight_ideal + weight_kg + 86) / 2) * cycle_factor) * 1.11,
+        gender == "Female" & Mode == "Treadmill" & weight_kg == weight_ideal ~ ((weight_kg + 43) * cycle_factor) * 1.11,
+        gender == "Female" & Mode == "Treadmill" & weight_kg > weight_ideal ~ (((weight_ideal + 43) * cycle_factor) + 6 * (weight_kg - weight_ideal)) * 1.11,
+        TRUE ~ NA_real_)
+    )
+  
+  data <- data %>% 
+    mutate(Age_Group = case_when(
+      Age_Group == "age" ~ "Current Age",
+      Age_Group == "age_Plus5" ~ "Age + 5",
+      Age_Group == "age_Plus10" ~ "Age + 10",
+      Age_Group == "age_Plus15" ~ "Age + 15",
+      Age_Group == "age_Minus5"~ "Age - 5",
+      Age_Group == "age_Minus10" ~ "Age - 10",
+      Age_Group == "age_Minus15" ~ "Age - 15"))
+  
+  data$Age_Group <- factor(data$Age_Group, levels = (c("Current Age", "Age + 5", "Age + 10", "Age + 15", "Age - 5", "Age - 10", "Age - 15" )))
+  
+  
+  
+  Hansen_Plot <- ggplot(data) +
+    geom_line(data = filter(data, Age_Group == "Current Age"), aes(x = weight_assumed_kg, y = VO2_peak_assumed, color = Age_Group), linewidth = 1.2) +
+    
+    geom_point(data = filter(data, Age_Group == "Current Age"),
+               aes(x = weight_ideal, y = VO2_peak_ideal,
+                   text = paste("Ideal Weight:", sprintf("%.2f", weight_ideal), "kg<br>VO2 Peak Predicted:",
+                                sprintf("%.2f", VO2_peak_ideal), "mL/min<br>Percent Predicted:",
+                                sprintf("%.2f%%", (measured_VO2 / VO2_peak_ideal * 100)))), color = "red", size = 5) +
+    geom_point(data = filter(data, Age_Group == "Current Age"),
+               aes(x = weight_kg, y = VO2_peak_actual,
+                   text = paste("Measured Weight:", sprintf("%.2f", weight_kg), "kg<br>VO2 Peak Predicted:",
+                                sprintf("%.2f", VO2_peak_actual), "mL/min<br>Percent Predicted:",
+                                sprintf("%.2f%%", (measured_VO2 / VO2_peak_actual * 100)))), color = "blue", size = 5) +
+    
+    geom_line(data = filter(data, Age_Group != "Current Age"), aes(x = weight_assumed_kg, y = VO2_peak_assumed, color = Age_Group), linetype = "dashed") +
+    
+    labs(y = "VO2 Peak Predicted mL/min", x = "Weight (kg)", color = "Age Groups") +
+    geom_vline(xintercept = data$slider_weight, linetype = "dashed", color = "black") +
+    scale_y_continuous(
+      limits = c(1000, 6000),
+      breaks = seq(1000, 6000, by = 1000),  # Major breaks
+      minor_breaks = seq(1500, 5500, by = 1000)
+    ) +
+    theme_grey() +
+    scale_color_manual(values = c(
+      "Current Age" = "black", 
+      "Age + 5"     = "#7AA6DCFF",
+      "Age + 10"    = "#EFC000FF",
+      "Age + 15"    = "#868686FF",
+      "Age - 5"     = "#CD534CFF",
+      "Age - 10"    = "#8F7700FF",
+      "Age - 15"    = "#003C67FF")) +
+    theme(
+      axis.text = element_text(face = "bold", size = 12),
+      axis.title = element_text(face = "bold", size = 14),
+      plot.caption = element_text(size = 12),
+      panel.grid.minor = element_line(size = 0.5, linetype = 'solid', colour = "gray50"),
+      legend.position= "bottom"
+    )
+  
+  
+  # Convert to Plotly and specify tooltip information
+  
+  
+  if (plot_type == "interactive") {
+    return(plotly::ggplotly(Hansen_Plot, tooltip = "text", dynamicTicks= TRUE))
+  } else {
+    return(Hansen_Plot)
+  }
+  
+}
+generateBruceplot <- function(input, plot_type = c("interactive", "static")){
+  
+  # Plotting code for Friend equation
+  
+  data <- data.frame(
+    weight_assumed_kg = seq(from = 50, to = 150, by = 1),
+    gender = input$gender,
+    Mode = input$mode,
+    weight_kg = input$weight,
+    height_cm = input$height,
+    age = input$age,
+    age_Plus5= input$age + 5,
+    age_Plus10= input$age + 10,
+    age_Plus15= input$age + 15,
+    age_Minus5= input$age - 5,
+    age_Minus10= input$age - 10,
+    age_Minus15= input$age - 15,
+    measured_VO2 = input$measuredVO2
+  )
+  
+  data <- data %>%
+    mutate(
+      slider_weight = input$SliderBMI * ((height_cm/100) * (height_cm/100)))
+  
+  # Convert weight and height to lbs and inches for FRIEND equation
+  data <- data %>%
+    mutate(
+      weight_lbs = weight_kg * 2.20462,
+      height_in = height_cm / 2.54,
+      weight_ideal = case_when(
+        gender == "Male" ~ 0.79 * height_cm - 60.7,
+        gender == "Female" ~ 0.65 * height_cm - 42.8,
+        TRUE ~ NA_real_
+      ),
+      cycle_factor = case_when(
+        gender == "Male" ~ 50.72 - 0.372 * age,
+        gender == "Female" ~ 22.78 - 0.17 * age,
+        TRUE ~ NA_real_
+      )
+    )
+  
+  
+  data <- data %>% 
+    pivot_longer(
+      cols = c(age, age_Plus5, age_Plus10, age_Plus15, age_Minus5, age_Minus10,age_Minus15),
+      names_to = "Age_Group",
+      values_to = "age"
+    )
+  
+  #corrected for Mode: 0.89 * for bike
+  
+  data <- data %>%
+    mutate(
+      
+      
+      VO2_peak_assumed = case_when(
+        gender == "Male" & Mode == "Treadmill" ~ ((60 - (0.55* age)) * (weight_assumed_kg)), 
+        gender == "Female" & Mode == "Treadmill" ~ ((48 - (0.37 * age)) * (weight_assumed_kg)),
+        gender == "Male" & Mode == "Bike" ~ (((60 - (0.55* age)) * (weight_assumed_kg)) * 0.89), 
+        gender == "Female" & Mode == "Bike" ~ (((48 - (0.37 * age)) * (weight_assumed_kg)) * 0.89),
+        TRUE ~ NA_real_),
+      
+      
+      VO2_peak_ideal = case_when(
+        gender == "Male" & Mode == "Treadmill" ~ ((60 - (0.55* age)) * (weight_ideal)), 
+        gender == "Female" & Mode == "Treadmill" ~ ((48 - (0.37 * age)) * (weight_ideal)),
+        gender == "Male" & Mode == "Bike" ~ (((60 - (0.55* age)) * (weight_ideal)) * 0.89), 
+        gender == "Female" & Mode == "Bike" ~ (((48 - (0.37 * age)) * (weight_ideal)) * 0.89),
+        TRUE ~ NA_real_),
+      
+      
+      VO2_peak_actual = case_when(#(mL/min)
+        gender == "Male" & Mode == "Treadmill" ~ ((60 - (0.55* age)) * (weight_kg)), 
+        gender == "Female" & Mode == "Treadmill" ~ ((48 - (0.37 * age)) * (weight_kg)),
+        gender == "Male" & Mode == "Bike" ~ (((60 - (0.55* age)) * (weight_kg)) * 0.89), 
+        gender == "Female" & Mode == "Bike" ~ (((48 - (0.37 * age)) * (weight_kg)) * 0.89),
+        TRUE ~ NA_real_)
+    )
+  
+  data <- data %>% 
+    mutate(Age_Group = case_when(
+      Age_Group == "age" ~ "Current Age",
+      Age_Group == "age_Plus5" ~ "Age + 5",
+      Age_Group == "age_Plus10" ~ "Age + 10",
+      Age_Group == "age_Plus15" ~ "Age + 15",
+      Age_Group == "age_Minus5"~ "Age - 5",
+      Age_Group == "age_Minus10" ~ "Age - 10",
+      Age_Group == "age_Minus15" ~ "Age - 15"))
+  
+  data$Age_Group <- factor(data$Age_Group, levels = (c("Current Age", "Age + 5", "Age + 10", "Age + 15", "Age - 5", "Age - 10", "Age - 15" )))
+  
+  
+  Bruce_Plot <- ggplot(data) +
+    geom_line(data = filter(data, Age_Group == "Current Age"), aes(x = weight_assumed_kg, y = VO2_peak_assumed, color = Age_Group), linewidth = 1.2) +
+    
+    geom_point(data = filter(data, Age_Group == "Current Age"),
+               aes(x = weight_ideal, y = VO2_peak_ideal,
+                   text = paste("Ideal Weight:", sprintf("%.2f", weight_ideal), "kg<br>VO2 Peak Predicted:",
+                                sprintf("%.2f", VO2_peak_ideal), "mL/min<br>Percent Predicted:",
+                                sprintf("%.2f%%", (measured_VO2 / VO2_peak_ideal * 100)))), color = "red", size = 5) +
+    geom_point(data = filter(data, Age_Group == "Current Age"),
+               aes(x = weight_kg, y = VO2_peak_actual,
+                   text = paste("Measured Weight:", sprintf("%.2f", weight_kg), "kg<br>VO2 Peak Predicted:",
+                                sprintf("%.2f", VO2_peak_actual), "mL/min<br>Percent Predicted:",
+                                sprintf("%.2f%%", (measured_VO2 / VO2_peak_actual * 100)))), color = "blue", size = 5) +
+    
+    geom_line(data = filter(data, Age_Group != "Current Age"), aes(x = weight_assumed_kg, y = VO2_peak_assumed, color = Age_Group), linetype = "dashed") +
+    
+    labs(y = "VO2 Peak Predicted mL/min", x = "Weight (kg)", color = "Age Groups") +
+    geom_vline(xintercept = data$slider_weight, linetype = "dashed", color = "black") +
+    scale_y_continuous(
+      limits = c(1000, 6000),
+      breaks = seq(1000, 6000, by = 1000),  # Major breaks
+      minor_breaks = seq(1500, 5500, by = 1000)
+    ) +
+    theme_grey() +
+    scale_color_manual(values = c(
+      "Current Age" = "black", 
+      "Age + 5"     = "#7AA6DCFF",
+      "Age + 10"    = "#EFC000FF",
+      "Age + 15"    = "#868686FF",
+      "Age - 5"     = "#CD534CFF",
+      "Age - 10"    = "#8F7700FF",
+      "Age - 15"    = "#003C67FF")) +
+    theme(
+      axis.text = element_text(face = "bold", size = 12),
+      axis.title = element_text(face = "bold", size = 14),
+      plot.caption = element_text(size = 12),
+      panel.grid.minor = element_line(size = 0.5, linetype = 'solid', colour = "gray50"),
+      legend.position= "bottom"
+    )
+  
+  # Convert to Plotly and specify tooltip information
+  
+  if (plot_type == "interactive") {
+    return(plotly::ggplotly(Bruce_Plot, tooltip = "text", dynamicTicks= TRUE))
+  } else {
+    return(Bruce_Plot)
+  }
+  
+  
+}
+generateJonesplot <- function(input, plot_type = c("interactive", "static")){
+  
+  # Plotting code for Friend equation
+  
+  data <- data.frame(
+    weight_assumed_kg = seq(from = 50, to = 150, by = 1),
+    gender = input$gender,
+    Mode = input$mode,
+    weight_kg = input$weight,
+    height_cm = input$height,
+    age = input$age,
+    age_Plus5= input$age + 5,
+    age_Plus10= input$age + 10,
+    age_Plus15= input$age + 15,
+    age_Minus5= input$age - 5,
+    age_Minus10= input$age - 10,
+    age_Minus15= input$age - 15,
+    measured_VO2 = input$measuredVO2
+  )
+  
+  data <- data %>%
+    mutate(
+      slider_weight = input$SliderBMI * ((height_cm/100) * (height_cm/100)))
+  
+  # Convert weight and height to lbs and inches for FRIEND equation
+  data <- data %>%
+    mutate(
+      weight_lbs = weight_kg * 2.20462,
+      height_in = height_cm / 2.54,
+      weight_ideal = case_when(
+        gender == "Male" ~ 0.79 * height_cm - 60.7,
+        gender == "Female" ~ 0.65 * height_cm - 42.8,
+        TRUE ~ NA_real_
+      ),
+      cycle_factor = case_when(
+        gender == "Male" ~ 50.72 - 0.372 * age,
+        gender == "Female" ~ 22.78 - 0.17 * age,
+        TRUE ~ NA_real_
+      )
+    )
+  
+  # corrected for mode: 1.11 for tread
+  
+  data <- data %>% 
+    pivot_longer(
+      cols = c(age, age_Plus5, age_Plus10, age_Plus15, age_Minus5, age_Minus10,age_Minus15),
+      names_to = "Age_Group",
+      values_to = "age"
+    )
+  
+  
+  
+  data <- data %>%
+    mutate(
+      VO2_peak_assumed = case_when(
+        gender == "Male" & Mode == "Treadmill" ~ (((-3.76 + 0.034 * height_cm + 0.022 * weight_assumed_kg - 0.028 * age) * 1000) * 1.11), 
+        gender == "Female" & Mode == "Treadmill" ~ (((-2.26 + 0.025 * height_cm + 0.01 * weight_assumed_kg - 0.018 * age) * 1000) * 1.11),
+        gender == "Male" & Mode == "Bike" ~ (-3.76 + 0.034 * height_cm + 0.022 * weight_assumed_kg - 0.028 * age) * 1000, 
+        gender == "Female" & Mode == "Bike" ~ (-2.26 + 0.025 * height_cm + 0.01 * weight_assumed_kg - 0.018 * age) * 1000,
+        TRUE ~ NA_real_),
+      
+      
+      VO2_peak_ideal = case_when(
+        gender == "Male" & Mode == "Treadmill" ~ (((-3.76 + 0.034 * height_cm + 0.022 * weight_ideal - 0.028 * age) * 1000) * 1.11), 
+        gender == "Female" & Mode == "Treadmill" ~ (((-2.26 + 0.025 * height_cm + 0.01 * weight_ideal - 0.018 * age) * 1000) * 1.11),
+        gender == "Male" & Mode == "Bike" ~ (-3.76 + 0.034 * height_cm + 0.022 * weight_ideal - 0.028 * age) * 1000, 
+        gender == "Female" & Mode == "Bike" ~ (-2.26 + 0.025 * height_cm + 0.01 * weight_ideal - 0.018 * age) * 1000,
+        TRUE ~ NA_real_),
+      
+      
+      VO2_peak_actual = case_when(#(mL/min)
+        gender == "Male" & Mode == "Treadmill" ~ (((-3.76 + 0.034 * height_cm + 0.022 * weight_kg - 0.028 * age) * 1000) * 1.11), 
+        gender == "Female"& Mode == "Treadmill" ~ (((-2.26 + 0.025 * height_cm + 0.01 * weight_kg - 0.018 * age) * 1000) * 1.11),
+        gender == "Male" & Mode == "Bike" ~ (-3.76 + 0.034 * height_cm + 0.022 * weight_kg - 0.028 * age) * 1000, 
+        gender == "Female"& Mode == "Bike" ~ (-2.26 + 0.025 * height_cm + 0.01 * weight_kg - 0.018 * age) * 1000,
+        TRUE ~ NA_real_)
+    )
+  
+  data <- data %>% 
+    mutate(Age_Group = case_when(
+      Age_Group == "age" ~ "Current Age",
+      Age_Group == "age_Plus5" ~ "Age + 5",
+      Age_Group == "age_Plus10" ~ "Age + 10",
+      Age_Group == "age_Plus15" ~ "Age + 15",
+      Age_Group == "age_Minus5"~ "Age - 5",
+      Age_Group == "age_Minus10" ~ "Age - 10",
+      Age_Group == "age_Minus15" ~ "Age - 15"))
+  
+  data$Age_Group <- factor(data$Age_Group, levels = (c("Current Age", "Age + 5", "Age + 10", "Age + 15", "Age - 5", "Age - 10", "Age - 15" )))
+  
+  
+  
+  Jones2_Plot <- ggplot(data) +
+    geom_line(data = filter(data, Age_Group == "Current Age"), aes(x = weight_assumed_kg, y = VO2_peak_assumed, color = Age_Group), linewidth = 1.2) +
+    
+    geom_point(data = filter(data, Age_Group == "Current Age"),
+               aes(x = weight_ideal, y = VO2_peak_ideal,
+                   text = paste("Ideal Weight:", sprintf("%.2f", weight_ideal), "kg<br>VO2 Peak Predicted:",
+                                sprintf("%.2f", VO2_peak_ideal), "mL/min<br>Percent Predicted:",
+                                sprintf("%.2f%%", (measured_VO2 / VO2_peak_ideal * 100)))), color = "red", size = 5) +
+    geom_point(data = filter(data, Age_Group == "Current Age"),
+               aes(x = weight_kg, y = VO2_peak_actual,
+                   text = paste("Measured Weight:", sprintf("%.2f", weight_kg), "kg<br>VO2 Peak Predicted:",
+                                sprintf("%.2f", VO2_peak_actual), "mL/min<br>Percent Predicted:",
+                                sprintf("%.2f%%", (measured_VO2 / VO2_peak_actual * 100)))), color = "blue", size = 5) +
+    
+    geom_line(data = filter(data, Age_Group != "Current Age"), aes(x = weight_assumed_kg, y = VO2_peak_assumed, color = Age_Group), linetype = "dashed") +
+    
+    labs(y = "VO2 Peak Predicted mL/min", x = "Weight (kg)", color = "Age Groups") +
+    geom_vline(xintercept = data$slider_weight, linetype = "dashed", color = "black") +
+    scale_y_continuous(
+      limits = c(1000, 6000),
+      breaks = seq(1000, 6000, by = 1000),  # Major breaks
+      minor_breaks = seq(1500, 5500, by = 1000)
+    ) +
+    theme_grey() +
+    scale_color_manual(values = c(
+      "Current Age" = "black", 
+      "Age + 5"     = "#7AA6DCFF",
+      "Age + 10"    = "#EFC000FF",
+      "Age + 15"    = "#868686FF",
+      "Age - 5"     = "#CD534CFF",
+      "Age - 10"    = "#8F7700FF",
+      "Age - 15"    = "#003C67FF")) +
+    theme(
+      axis.text = element_text(face = "bold", size = 12),
+      axis.title = element_text(face = "bold", size = 14),
+      plot.caption = element_text(size = 12),
+      panel.grid.minor = element_line(size = 0.5, linetype = 'solid', colour = "gray50"),
+      legend.position= "bottom"
+    )
+  
+  
+  # Convert to Plotly and specify tooltip information
+  
+  if (plot_type == "interactive") {
+    return(plotly::ggplotly(Jones2_Plot, tooltip = "text", dynamicTicks= TRUE))
+  } else {
+    return(Jones2_Plot)
+  }
+  
+}
+generateNederplot <- function(input, plot_type = c("interactive", "static")){
+  
+  # Plotting code for Friend equation
+  
+  data <- data.frame(
+    weight_assumed_kg = seq(from = 50, to = 150, by = 1),
+    gender = input$gender,
+    Mode = input$mode,
+    weight_kg = input$weight,
+    height_cm = input$height,
+    age = input$age,
+    age_Plus5= input$age + 5,
+    age_Plus10= input$age + 10,
+    age_Plus15= input$age + 15,
+    age_Minus5= input$age - 5,
+    age_Minus10= input$age - 10,
+    age_Minus15= input$age - 15,
+    measured_VO2 = input$measuredVO2
+  )
+  
+  data <- data %>%
+    mutate(
+      slider_weight = input$SliderBMI * ((height_cm/100) * (height_cm/100)))
+  
+  # Convert weight and height to lbs and inches for FRIEND equation
+  data <- data %>%
+    mutate(
+      weight_lbs = weight_kg * 2.20462,
+      height_in = height_cm / 2.54,
+      weight_ideal = case_when(
+        gender == "Male" ~ 0.79 * height_cm - 60.7,
+        gender == "Female" ~ 0.65 * height_cm - 42.8,
+        TRUE ~ NA_real_
+      ),
+      cycle_factor = case_when(
+        gender == "Male" ~ 50.72 - 0.372 * age,
+        gender == "Female" ~ 22.78 - 0.17 * age,
+        TRUE ~ NA_real_
+      )
+    )
+  
+  # corrected for mode * 1.11
+  data <- data %>% 
+    pivot_longer(
+      cols = c(age, age_Plus5, age_Plus10, age_Plus15, age_Minus5, age_Minus10,age_Minus15),
+      names_to = "Age_Group",
+      values_to = "age"
+    )
+  
+  
+  
+  data <- data %>%
+    mutate(
+      VO2_peak_assumed = case_when(
+        gender == "Male" & Mode == "Treadmill" ~ (((-24.3 * age) + (10.2 * weight_assumed_kg) + (8.3 * height_cm) + 1125) * 1.11), 
+        gender == "Female" & Mode == "Treadmill" ~ (((-13.7 * age) + (10.2 * weight_assumed_kg) + (8.3 * height_cm) + 60) * 1.11),
+        gender == "Male" & Mode == "Bike" ~ ((-24.3 * age) + (10.2 * weight_assumed_kg) + (8.3 * height_cm) + 1125), 
+        gender == "Female" & Mode == "Bike" ~ ((-13.7 * age) + (10.2 * weight_assumed_kg) + (8.3 * height_cm) + 60),
+        TRUE ~ NA_real_),
+      
+      
+      VO2_peak_ideal = case_when(
+        gender == "Male" & Mode == "Treadmill" ~ (((-24.3 * age) + (10.2 * weight_ideal) + (8.3 * height_cm) + 1125) * 1.11), 
+        gender == "Female" & Mode == "Treadmill" ~ (((-13.7 * age) + (10.2 * weight_ideal) + (8.3 * height_cm) + 60) * 1.11),
+        gender == "Male" & Mode == "Bike" ~ ((-24.3 * age) + (10.2 * weight_ideal) + (8.3 * height_cm) + 1125), 
+        gender == "Female" & Mode == "Bike" ~ ((-13.7 * age) + (10.2 * weight_ideal) + (8.3 * height_cm) + 60),
+        TRUE ~ NA_real_),
+      
+      
+      VO2_peak_actual = case_when(
+        gender == "Male" & Mode == "Treadmill" ~ (((-24.3 * age) + (10.2 * weight_kg) + (8.3 * height_cm) + 1125) * 1.11), 
+        gender == "Female" & Mode == "Treadmill" ~ (((-13.7 * age) + (10.2 * weight_kg) + (8.3 * height_cm) + 60) * 1.11),
+        gender == "Male" & Mode == "Bike" ~ ((-24.3 * age) + (10.2 * weight_kg) + (8.3 * height_cm) + 1125), 
+        gender == "Female" & Mode == "Bike" ~ ((-13.7 * age) + (10.2 * weight_kg) + (8.3 * height_cm) + 60),
+        TRUE ~ NA_real_)
+    )
+  
+  data <- data %>% 
+    mutate(Age_Group = case_when(
+      Age_Group == "age" ~ "Current Age",
+      Age_Group == "age_Plus5" ~ "Age + 5",
+      Age_Group == "age_Plus10" ~ "Age + 10",
+      Age_Group == "age_Plus15" ~ "Age + 15",
+      Age_Group == "age_Minus5"~ "Age - 5",
+      Age_Group == "age_Minus10" ~ "Age - 10",
+      Age_Group == "age_Minus15" ~ "Age - 15"))
+  
+  data$Age_Group <- factor(data$Age_Group, levels = (c("Current Age", "Age + 5", "Age + 10", "Age + 15", "Age - 5", "Age - 10", "Age - 15" )))
+  
+  
+  Neder_Plot <- ggplot(data) +
+    geom_line(data = filter(data, Age_Group == "Current Age"), aes(x = weight_assumed_kg, y = VO2_peak_assumed, color = Age_Group), linewidth = 1.2) +
+    
+    geom_point(data = filter(data, Age_Group == "Current Age"),
+               aes(x = weight_ideal, y = VO2_peak_ideal,
+                   text = paste("Ideal Weight:", sprintf("%.2f", weight_ideal), "kg<br>VO2 Peak Predicted:",
+                                sprintf("%.2f", VO2_peak_ideal), "mL/min<br>Percent Predicted:",
+                                sprintf("%.2f%%", (measured_VO2 / VO2_peak_ideal * 100)))), color = "red", size = 5) +
+    geom_point(data = filter(data, Age_Group == "Current Age"),
+               aes(x = weight_kg, y = VO2_peak_actual,
+                   text = paste("Measured Weight:", sprintf("%.2f", weight_kg), "kg<br>VO2 Peak Predicted:",
+                                sprintf("%.2f", VO2_peak_actual), "mL/min<br>Percent Predicted:",
+                                sprintf("%.2f%%", (measured_VO2 / VO2_peak_actual * 100)))), color = "blue", size = 5) +
+    
+    geom_line(data = filter(data, Age_Group != "Current Age"), aes(x = weight_assumed_kg, y = VO2_peak_assumed, color = Age_Group), linetype = "dashed") +
+    
+    labs(y = "VO2 Peak Predicted mL/min", x = "Weight (kg)", color = "Age Groups") +
+    geom_vline(xintercept = data$slider_weight, linetype = "dashed", color = "black") +
+    scale_y_continuous(
+      limits = c(1000, 6000),
+      breaks = seq(1000, 6000, by = 1000),  # Major breaks
+      minor_breaks = seq(1500, 5500, by = 1000)
+    ) +
+    theme_grey() +
+    scale_color_manual(values = c(
+      "Current Age" = "black", 
+      "Age + 5"     = "#7AA6DCFF",
+      "Age + 10"    = "#EFC000FF",
+      "Age + 15"    = "#868686FF",
+      "Age - 5"     = "#CD534CFF",
+      "Age - 10"    = "#8F7700FF",
+      "Age - 15"    = "#003C67FF")) +
+    theme(
+      axis.text = element_text(face = "bold", size = 12),
+      axis.title = element_text(face = "bold", size = 14),
+      plot.caption = element_text(size = 12),
+      panel.grid.minor = element_line(size = 0.5, linetype = 'solid', colour = "gray50"),
+      legend.position= "bottom"
+    )
+  
+  
+  # Convert to Plotly and specify tooltip information
+  
+  if (plot_type == "interactive") {
+    return(plotly::ggplotly(Neder_Plot, tooltip = "text", dynamicTicks= TRUE))
+  } else {
+    return(Neder_Plot)
+  }
+  
+}
+
 
 # Define UI using shinydashboard
 ui <- dashboardPage(
@@ -31,6 +971,14 @@ ui <- dashboardPage(
       menuItem("Help", icon = icon("question-circle"), tabName = "help"),
       menuItem("Comments", icon = icon("comment"), tabName = "comments"),
       
+      #Add the download button below the menu
+      br(), br(),
+      
+      div(
+        style = "text-align: center; margin-top: 20px;",
+        actionButton("open_report_modal", "Download Report", icon = icon("file-download"))
+      ),
+      
       # Add your logo here
       tags$div(class = "footer-logo",
                tags$a(href = "https://www.warrelatedillness.va.gov/WARRELATEDILLNESS/AHBPCE/network.asp", target = "_blank",
@@ -40,16 +988,22 @@ ui <- dashboardPage(
     )),
   
   dashboardBody(
+    tags$script(HTML("
+    $(document).on('shiny:connected', function() {
+      Shiny.setInputValue('show_disclaimer', true, {priority: 'event'});
+    });
+  ")),
+    
     tabItems(
       tabItem(tabName = "dashboard",
               fluidRow(
                 box(title = "Input Parameters", status = "primary", solidHeader = TRUE, width = 4, height = 565,
-                    selectInput("gender", "Gender", c("Male", "Female")),
+                    selectInput("gender", "Sex", c("Male", "Female")),
                     selectInput("mode", "Mode", c("Treadmill", "Bike")),
                     numericInput("weight", "Weight (kg)", value = 110),
                     numericInput("height", "Height (cm)", value = 180),
                     numericInput("age", "Age", value = 40),
-                    numericInput("measuredVO2", "Measured VO2 (ml/min)", value = 3000),
+                    numericInput("measuredVO2", "Measured VO2 (mL/min)", value = 3000),
                     actionButton("calculate", "Calculate")
                 ),
                 box(title = "Predicted VO2 Max", status = "primary", solidHeader = TRUE, width = 8,
@@ -67,9 +1021,9 @@ ui <- dashboardPage(
                       tabPanel("Wasserman vs Weight", tableOutput("resultsTableWasserman"), plotlyOutput("wassermanPlot")),
                       tabPanel("Hansen vs Weight", tableOutput("resultsTableHansen"), plotlyOutput("hansenPlot")),
                       tabPanel("Bruce vs Weight", tableOutput("resultsTableBruce"), plotlyOutput("BrucePlot")),
-                      tabPanel("Jones 2 vs Weight", tableOutput("resultsTableJones2"), plotlyOutput("jones2Plot")),
+                      tabPanel("Jones vs Weight", tableOutput("resultsTableJones2"), plotlyOutput("jones2Plot")),
                       tabPanel("Neder vs Weight", tableOutput("resultsTableNeder"), plotlyOutput("NederPlot")),
-                      tabPanel("Equations", tags$img(src = "equations3.png", height = "800px", width = "auto"))
+                      tabPanel("Equations", tags$img(src = "equations4.png", height = "800px", width = "auto"))
                     ))
               )),
       tabItem(tabName = "help",
@@ -80,13 +1034,15 @@ ui <- dashboardPage(
       tabItem(tabName = "comments",
               h2("Have tips to improve this site?"),
               actionButton("showModal", "Leave a Comment", class = "btn-primary"))
+      
     )
   )
 )
 
 
+
+
 server <- function(input, output, session) {
-  
   
   
   
@@ -182,7 +1138,7 @@ server <- function(input, output, session) {
               gender == "Female" & Mode == "Treadmill" ~ ((((-13.7 * age) + (10.2 * weight_kg) + (8.3 * height_cm) + 60)) * 1.11),
               TRUE ~ NA_real_)
           ))
-      
+    
     
     VO2_Predicted <- VO2_Predicted %>% 
       mutate(
@@ -232,12 +1188,15 @@ server <- function(input, output, session) {
         VO2_peak_Jones2,
         VO2_peak_Neder
       ) %>% 
+      mutate(
+        across(everything(), ~ sprintf("%.2f mL/min", .x))
+      ) %>% 
       rename(
         "FRIEND Predicted" = VO2_peak_Friend_general,
         "Wasserman Predicted" = VO2_peak_wasserman,
         "Hansen Predicted" = VO2_peak_Hansen,
         "Bruce Predicted" = VO2_peak_Bruce,
-        "Jones 2 Predicted" = VO2_peak_Jones2,
+        "Jones Predicted" = VO2_peak_Jones2,
         "Neder Predicted" = VO2_peak_Neder
       )
   })
@@ -294,6 +1253,8 @@ server <- function(input, output, session) {
         BMI,
         VO2_peak_Friend_general,
         "Percent Predicted") %>% 
+      mutate(
+        VO2_peak_Friend_general = sprintf("%.2f mL/min", VO2_peak_Friend_general)) %>% 
       rename(
         "VO2 Predicted" = VO2_peak_Friend_general
       )
@@ -336,6 +1297,8 @@ server <- function(input, output, session) {
         BMI,
         VO2_peak_wasserman,
         "Percent Predicted") %>% 
+      mutate(
+        VO2_peak_wasserman = sprintf("%.2f mL/min", VO2_peak_wasserman)) %>% 
       rename(
         "VO2 Predicted" = VO2_peak_wasserman
       )
@@ -403,6 +1366,8 @@ server <- function(input, output, session) {
         BMI,
         VO2_peak_Hansen,
         "Percent Predicted") %>% 
+      mutate(
+        VO2_peak_Hansen = sprintf("%.2f mL/min", VO2_peak_Hansen)) %>% 
       rename(
         "VO2 Predicted" = VO2_peak_Hansen
       )
@@ -446,6 +1411,8 @@ server <- function(input, output, session) {
         BMI,
         VO2_peak_Bruce,
         "Percent Predicted") %>% 
+      mutate(
+        VO2_peak_Bruce = sprintf("%.2f mL/min", VO2_peak_Bruce)) %>% 
       rename(
         "VO2 Predicted" = VO2_peak_Bruce
       )
@@ -489,6 +1456,8 @@ server <- function(input, output, session) {
         BMI,
         VO2_peak_Jones2,
         "Percent Predicted") %>% 
+      mutate(
+        VO2_peak_Jones2 = sprintf("%.2f mL/min", VO2_peak_Jones2)) %>% 
       rename(
         "VO2 Predicted" = VO2_peak_Jones2
       )
@@ -529,11 +1498,11 @@ server <- function(input, output, session) {
     VO2_Predicted_tableNeder <- VO2_Predicted_tableNeder %>%
       mutate(
         VO2_peak_Neder= case_when(
-            gender == "Male" & Mode == "Treadmill" ~ (((-24.3 * age) + (10.2 * weight_kg) + (8.3 * height_cm) + 1125) * 1.11), 
-            gender == "Female" & Mode == "Treadmill" ~ (((-13.7 * age) + (10.2 * weight_kg) + (8.3 * height_cm) + 60) * 1.11),
-            gender == "Male" & Mode == "Bike" ~ ((-24.3 * age) + (10.2 * weight_kg) + (8.3 * height_cm) + 1125), 
-            gender == "Female" & Mode == "Bike" ~ ((-13.7 * age) + (10.2 * weight_kg) + (8.3 * height_cm) + 60),
-            TRUE ~ NA_real_))
+          gender == "Male" & Mode == "Treadmill" ~ (((-24.3 * age) + (10.2 * weight_kg) + (8.3 * height_cm) + 1125) * 1.11), 
+          gender == "Female" & Mode == "Treadmill" ~ (((-13.7 * age) + (10.2 * weight_kg) + (8.3 * height_cm) + 60) * 1.11),
+          gender == "Male" & Mode == "Bike" ~ ((-24.3 * age) + (10.2 * weight_kg) + (8.3 * height_cm) + 1125), 
+          gender == "Female" & Mode == "Bike" ~ ((-13.7 * age) + (10.2 * weight_kg) + (8.3 * height_cm) + 60),
+          TRUE ~ NA_real_))
     
     VO2_Predicted_tableNeder <- VO2_Predicted_tableNeder %>%
       mutate(
@@ -546,1155 +1515,159 @@ server <- function(input, output, session) {
         BMI,
         VO2_peak_Neder,
         "Percent Predicted") %>% 
+      mutate(
+        VO2_peak_Neder = sprintf("%.2f mL/min", VO2_peak_Neder)) %>% 
       rename(
         "VO2 Predicted" = VO2_peak_Neder
       )
   })
   
   # Output plots
+  
+  
   output$comparisonPlot <- renderPlot({
     
-    
-    # progress bar with Percent predicted    
-    data <- results()
-    
-    data <- data %>% 
-      select(
-        Friend_pp,
-        Wasserman_pp,
-        Hansen_pp,
-        Bruce_pp,
-        Jones2_pp,
-        Neder_pp
-      ) %>% 
-      rename(
-        FRIEND = Friend_pp,
-        Wasserman = Wasserman_pp,
-        Hansen = Hansen_pp,
-        Bruce = Bruce_pp,
-        "Jones 2" = Jones2_pp,
-        Neder = Neder_pp
-      )
-    
-    data_long <- data %>% 
-      pivot_longer(
-        cols = c("FRIEND", "Wasserman", "Hansen", "Bruce", "Jones 2", "Neder"),
-        names_to = "Equation",
-        values_to = "Percent"
-      )
-    
-    data_long$Percent <- round(data_long$Percent, digits = 0)
-    
-    data_long %>% 
-      ggplot() +
-      geom_col(aes(x = Equation, y = 100), fill = I("lightgrey"), alpha = 0.5) +
-      geom_col(aes(x = Equation, y = Percent, fill = Percent)) +
-      scale_fill_gradient2(low = "red", mid = "yellow", high = "green", midpoint = 75) +
-      geom_text(aes(x = Equation, y = Percent, label = paste0(Percent, "%")), vjust = -0.5, color = "black", fontface = "bold") +
-      labs(title = "Percent Predicted VO2 Max",
-           x = "Equation",
-           y = "Percent Predicted (%)") +
-      theme_minimal() +
-      theme(
-        legend.position = "none" ,
-        axis.title.x = element_blank(),
-        axis.title.y = element_blank(),
-        axis.text =  element_text(face = "bold", size = 12),
-        panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank(),
-        axis.ticks.y = element_blank()) +
-      coord_flip()  # Optional: Flips the axes for a horizontal bar plot
-    
-    
-    
-    
-    # plot for actual values      
-    # results() %>%
-    #   ggplot() +
-    #   geom_point(aes(x = "Actual VO2", y = input$measuredVO2), width = 0.15, size = 5) +
-    #   geom_point(aes(x = "Friend", y = VO2_peak_Friend_general), width = 0.15, size = 5) +
-    #   geom_point(aes(x = "Wasserman", y = VO2_peak_wasserman), width = 0.15, size = 5) +
-    #   geom_point(aes(x = "Hansen", y = VO2_peak_Hansen), width = 0.15, size = 5) +  
-    #   geom_point(aes(x = "Bruce", y = VO2_peak_Bruce), width = 0.15, size = 5) + 
-    #   geom_point(aes(x = "Jones 2", y = VO2_peak_Jones2), width = 0.15, size = 5) +
-    #   labs(y = "VO2 Peak Predicted ml/min", x = "")  +
-    #   scale_color_jco() +
-    #    theme_grey() +
-    #   scale_fill_jco() 
-    
+    generateComparisonplot(results())
     
   })
   
+  
+  
   output$friendPlot <- renderPlotly({
-    
-    # Plotting code for Friend equation
-    
-    data <- data.frame(
-      weight_assumed_kg = seq(from = 50, to = 150, by = 1),
-      gender = input$gender,
-      Mode = input$mode,
-      weight_kg = input$weight,
-      height_cm = input$height,
-      age = input$age,
-      age_Plus5= input$age + 5,
-      age_Plus10= input$age + 10,
-      age_Plus15= input$age + 15,
-      age_Minus5= input$age - 5,
-      age_Minus10= input$age - 10,
-      age_Minus15= input$age - 15,
-      measured_VO2 = input$measuredVO2
-    )
-    
-    data <- data %>%
-      mutate(
-        slider_weight = input$SliderBMI * ((height_cm/100) * (height_cm/100)))
-    
-    # Convert weight and height to lbs and inches for FRIEND equation
-    data <- data %>%
-      mutate(
-        weight_lbs = weight_kg * 2.20462,
-        height_in = height_cm / 2.54,
-        weight_ideal = case_when(
-          gender == "Male" ~ 0.79 * height_cm - 60.7,
-          gender == "Female" ~ 0.65 * height_cm - 42.8,
-          TRUE ~ NA_real_
-        ),
-        cycle_factor = case_when(
-          gender == "Male" ~ 50.72 - 0.372 * age,
-          gender == "Female" ~ 22.78 - 0.17 * age,
-          TRUE ~ NA_real_
-        )
-      )
-    
-    
-    data <- data %>% 
-      pivot_longer(
-        cols = c(age, age_Plus5, age_Plus10, age_Plus15, age_Minus5, age_Minus10,age_Minus15),
-        names_to = "Age_Group",
-        values_to = "age"
-      )
-    
-    
-    data <- data %>%
-      mutate(
-        VO2_peak_assumed = case_when(
-          gender == "Male" & Mode == "Bike" ~ (45.2 - (0.35 * age) - (10.9 * 1) - (0.15 * (weight_assumed_kg * 2.20462) ) + (0.68 * height_in) - (0.46 * 2)) * weight_assumed_kg,
-          gender == "Female" & Mode == "Bike" ~ (45.2 - (0.35 * age) - (10.9 * 2) - (0.15 * (weight_assumed_kg * 2.20462)) + (0.68 * height_in) - (0.46 * 2)) * weight_assumed_kg,
-          gender == "Male" & Mode == "Treadmill" ~ (45.2 - (0.35 * age) - (10.9 * 1) - (0.15 * (weight_assumed_kg * 2.20462)) + (0.68 * height_in) - (0.46 * 1)) * weight_assumed_kg,
-          gender == "Female" & Mode == "Treadmill" ~ (45.2 - (0.35 * age) - (10.9 * 2) - (0.15 * (weight_assumed_kg * 2.20462)) + (0.68 * height_in) - (0.46 * 1)) * weight_assumed_kg,
-          TRUE ~ NA_real_),
-        
-        
-        VO2_peak_ideal = case_when(
-          gender == "Male" & Mode == "Bike" ~ (45.2 - (0.35 * age) - (10.9 * 1) - (0.15 * (2.20462  * weight_ideal)) + (0.68 * height_in) - (0.46 * 2)) * weight_ideal,
-          gender == "Female" & Mode == "Bike" ~ (45.2 - (0.35 * age) - (10.9 * 2) - (0.15 * (2.20462  * weight_ideal)) + (0.68 * height_in) - (0.46 * 2)) * weight_ideal,
-          gender == "Male" & Mode == "Treadmill" ~ (45.2 - (0.35 * age) - (10.9 * 1) - (0.15 * (2.20462  * weight_ideal)) + (0.68 * height_in) - (0.46 * 1)) * weight_ideal,
-          gender == "Female" & Mode == "Treadmill" ~ (45.2 - (0.35 * age) - (10.9 * 2) - (0.15 * (2.20462  * weight_ideal)) + (0.68 * height_in) - (0.46 * 1)) * weight_ideal,
-          TRUE ~ NA_real_),
-        
-        VO2_peak_actual = case_when(
-          gender == "Male" & Mode == "Bike" ~ (45.2 - (0.35 * age) - (10.9 * 1) - (0.15 * weight_lbs) + (0.68 * height_in) - (0.46 * 2)) * weight_kg,
-          gender == "Female" & Mode == "Bike" ~ (45.2 - (0.35 * age) - (10.9 * 2) - (0.15 * weight_lbs) + (0.68 * height_in) - (0.46 * 2)) * weight_kg,
-          gender == "Male" & Mode == "Treadmill" ~ (45.2 - (0.35 * age) - (10.9 * 1) - (0.15 * weight_lbs) + (0.68 * height_in) - (0.46 * 1)) * weight_kg,
-          gender == "Female" & Mode == "Treadmill" ~ (45.2 - (0.35 * age) - (10.9 * 2) - (0.15 * weight_lbs) + (0.68 * height_in) - (0.46 * 1)) * weight_kg,
-          TRUE ~ NA_real_)
-        
-      )
-    
-    
-    data <- data %>% 
-      mutate(Age_Group = case_when(
-        Age_Group == "age" ~ "Current Age",
-        Age_Group == "age_Plus5" ~ "Age + 5",
-        Age_Group == "age_Plus10" ~ "Age + 10",
-        Age_Group == "age_Plus15" ~ "Age + 15",
-        Age_Group == "age_Minus5"~ "Age - 5",
-        Age_Group == "age_Minus10" ~ "Age - 10",
-        Age_Group == "age_Minus15" ~ "Age - 15"))
-    
-    
-    
-    # FRIEND_Plot <- ggplot(data) +
-    #   geom_line(aes(x = weight_assumed_kg, y = VO2_peak_Friend_assumed), color = "black") +
-    #   geom_line(aes(x = weight_assumed_kg, y = VO2_peak_Friend_AgeP5), color = "red") +
-    #   geom_text(aes(x = 150, y = VO2_peak_Friend_AgeP5, label = "Age + 5")) +
-    #   geom_point(aes(x = weight_ideal, y = VO2_peak_Friend_ideal,
-    #                  text = paste("Ideal Weight:", sprintf("%.2f", weight_ideal), "kg<br>VO2 Peak Predicted:",
-    #                               sprintf("%.2f", VO2_peak_Friend_ideal), "ml/min<br>Percent Predicted:",
-    #                               sprintf("%.2f%%", (measured_VO2 / VO2_peak_Friend_ideal * 100)))), color = "red", size = 5) +
-    #   geom_point(aes(x = weight_kg, y = VO2_peak_Friend_actual,
-    #                  text = paste("Measured Weight:", sprintf("%.2f", weight_kg), "kg<br>VO2 Peak Predicted:",
-    #                               sprintf("%.2f", VO2_peak_Friend_actual), "ml/min<br>Percent Predicted:",
-    #                               sprintf("%.2f%%", (measured_VO2 / VO2_peak_Friend_actual * 100)))), color = "blue", size = 5) +
-    #   labs(y = "VO2 Peak Predicted ml/min", x = "Weight (kg)", caption = "Blue Dot = VO2 @ Actual Weight | Red Dot = VO2 @ Ideal Weight") +
-    #   geom_vline(xintercept = data$slider_weight, linetype = "dashed", color = "black") +
-    #   scale_y_continuous(
-    #     limits = c(1000, 6000),
-    #     breaks = seq(1000, 6000, by = 1000),  # Major breaks
-    #     minor_breaks = seq(1500, 5500, by = 1000)
-    #   ) +
-    #   theme_grey() +
-    #   theme(
-    #     axis.text = element_text(face = "bold", size = 12),
-    #     axis.title = element_text(face = "bold", size = 14),
-    #     plot.caption = element_text(size = 12),
-    #     panel.grid.minor = element_line(size = 0.5, linetype = 'solid', colour = "gray50")
-    #   )
-    
-    # Convert to Plotly and specify tooltip information
-   
-    FRIEND_Plot <- ggplot(data) +
-      geom_line(data = filter(data, Age_Group == "Current Age"), aes(x = weight_assumed_kg, y = VO2_peak_assumed, color = Age_Group), linewidth = 1.2) +
-      
-      geom_point(data = filter(data, Age_Group == "Current Age"),
-                 aes(x = weight_ideal, y = VO2_peak_ideal,
-                     text = paste("Ideal Weight:", sprintf("%.2f", weight_ideal), "kg<br>VO2 Peak Predicted:",
-                                  sprintf("%.2f", VO2_peak_ideal), "ml/min<br>Percent Predicted:",
-                                  sprintf("%.2f%%", (measured_VO2 / VO2_peak_ideal * 100)))), color = "red", size = 5) +
-      geom_point(data = filter(data, Age_Group == "Current Age"),
-                 aes(x = weight_kg, y = VO2_peak_actual,
-                     text = paste("Measured Weight:", sprintf("%.2f", weight_kg), "kg<br>VO2 Peak Predicted:",
-                                  sprintf("%.2f", VO2_peak_actual), "ml/min<br>Percent Predicted:",
-                                  sprintf("%.2f%%", (measured_VO2 / VO2_peak_actual * 100)))), color = "blue", size = 5) +
-      
-      geom_line(data = filter(data, Age_Group != "Current Age"), aes(x = weight_assumed_kg, y = VO2_peak_assumed, color = Age_Group), linetype = "dashed") +
-      
-      labs(y = "VO2 Peak Predicted ml/min", x = "Weight (kg)", color = "Age Groups") +
-      geom_vline(xintercept = data$slider_weight, linetype = "dashed", color = "black") +
-      scale_y_continuous(
-        limits = c(1000, 6000),
-        breaks = seq(1000, 6000, by = 1000),  # Major breaks
-        minor_breaks = seq(1500, 5500, by = 1000)
-      ) +
-      theme_grey() +
-      scale_color_manual(values = c(
-        "Current Age" = "black", 
-        "Age + 5"     = "#7AA6DCFF",
-        "Age + 10"    = "#EFC000FF",
-        "Age + 15"    = "#868686FF",
-        "Age - 5"     = "#CD534CFF",
-        "Age - 10"    = "#8F7700FF",
-        "Age - 15"    = "#003C67FF")) +
-      theme(
-        axis.text = element_text(face = "bold", size = 12),
-        axis.title = element_text(face = "bold", size = 14),
-        plot.caption = element_text(size = 12),
-        panel.grid.minor = element_line(size = 0.5, linetype = 'solid', colour = "gray50"),
-        legend.position= "bottom"
-      )
-    
-    
-    FRIEND_Plot <- ggplotly(FRIEND_Plot, tooltip = "text", dynamicTicks= TRUE)
-    FRIEND_Plot
-    
-    
+    generateFriendPlot(input, plot_type = "interactive")
     
   })
   
   output$wassermanPlot <- renderPlotly({
-    
-    # Plotting code for wesserman equation
-    
-    data <- data.frame(
-      weight_assumed_kg = seq(from = 50, to = 150, by = 1),
-      gender = input$gender,
-      Mode = input$mode,
-      weight_kg = input$weight,
-      height_cm = input$height,
-      age = input$age,
-      age_Plus5= input$age + 5,
-      age_Plus10= input$age + 10,
-      age_Plus15= input$age + 15,
-      age_Minus5= input$age - 5,
-      age_Minus10= input$age - 10,
-      age_Minus15= input$age - 15,
-      measured_VO2 = input$measuredVO2
-    )
-    
-    data <- data %>%
-      mutate(
-        slider_weight = input$SliderBMI * ((height_cm/100) * (height_cm/100)))
-    
-    # Convert weight and height to lbs and inches for FRIEND equation
-    data <- data %>%
-      mutate(
-        weight_lbs = weight_kg * 2.20462,
-        height_in = height_cm / 2.54,
-        weight_ideal = case_when(
-          gender == "Male" ~ 0.79 * height_cm - 60.7,
-          gender == "Female" ~ 0.65 * height_cm - 42.8,
-          TRUE ~ NA_real_
-        ),
-        cycle_factor = case_when(
-          gender == "Male" ~ 50.72 - 0.372 * age,
-          gender == "Female" ~ 22.78 - 0.17 * age,
-          TRUE ~ NA_real_
-        )
-      )
-    
-    data <- data %>% 
-      pivot_longer(
-        cols = c(age, age_Plus5, age_Plus10, age_Plus15, age_Minus5, age_Minus10,age_Minus15),
-        names_to = "Age_Group",
-        values_to = "age"
-      )
-    
-    # corrected for Mode *1.11 if Treadmill
-    data <- data %>%
-      mutate(
-        VO2_peak_assumed = case_when(
-          gender == "Male" & Mode == "Treadmill" ~ ((weight_assumed_kg * (50.72 - (0.372 * age))) * 1.11), 
-          gender == "Female" & Mode == "Treadmill" ~ ((weight_assumed_kg + 42.8) * (22.78 - (0.17 * age)) * 1.11),
-          gender == "Male" & Mode == "Bike" ~ (weight_assumed_kg * (50.72 - (0.372 * age))), 
-          gender == "Female" & Mode == "Bike" ~ (weight_assumed_kg + 42.8) * (22.78 - (0.17 * age)),
-          TRUE ~ NA_real_),
-        
-        
-        VO2_peak_ideal = case_when(
-          gender == "Male" & Mode == "Treadmill" ~ ((weight_ideal * (50.72 - (0.372 * age))) * 1.11), 
-          gender == "Female" & Mode == "Treadmill" ~ ((weight_ideal + 42.8) * (22.78 - (0.17 * age)) * 1.11),
-          gender == "Male" & Mode == "Bike" ~ (weight_ideal * (50.72 - (0.372 * age))), 
-          gender == "Female"& Mode == "Bike" ~ (weight_ideal + 42.8) * (22.78 - (0.17 * age)),
-          TRUE ~ NA_real_),
-        
-        
-        VO2_peak_actual = case_when( #(ml/min)
-          gender == "Male" & Mode == "Treadmill" ~ ((weight_kg * (50.72 - (0.372 * age))) * 1.11), 
-          gender == "Female" & Mode == "Treadmill" ~ ((weight_kg + 42.8) * (22.78 - (0.17 * age)) * 1.11),
-          gender == "Male" & Mode == "Bike" ~ (weight_kg * (50.72 - (0.372 * age))), 
-          gender == "Female" & Mode == "Bike" ~ (weight_kg + 42.8) * (22.78 - (0.17 * age)),
-          TRUE ~ NA_real_)
-        
-      )
-    
-    data <- data %>% 
-      mutate(Age_Group = case_when(
-        Age_Group == "age" ~ "Current Age",
-        Age_Group == "age_Plus5" ~ "Age + 5",
-        Age_Group == "age_Plus10" ~ "Age + 10",
-        Age_Group == "age_Plus15" ~ "Age + 15",
-        Age_Group == "age_Minus5"~ "Age - 5",
-        Age_Group == "age_Minus10" ~ "Age - 10",
-        Age_Group == "age_Minus15" ~ "Age - 15"))
-    
-    # wasserman_Plot <- ggplot(data) +
-    #   geom_line(aes(x = weight_assumed_kg, y = VO2_peak.wasserman_assumed), color = "black") +
-    #   geom_point(aes(x = weight_ideal, y = VO2_peak.wasserman_ideal,
-    #                  text = paste("Ideal Weight:", sprintf("%.2f", weight_ideal), "kg<br>VO2 Peak Predicted:",
-    #                               sprintf("%.2f", VO2_peak.wasserman_ideal), "ml/min<br>Percent Predicted:",
-    #                               sprintf("%.2f%%", (measured_VO2 / VO2_peak.wasserman_ideal * 100)))), color = "red", size = 5) +
-    #   geom_point(aes(x = weight_kg, y = VO2_peak.wasserman_actual,
-    #                  text = paste("Measured Weight:", sprintf("%.2f", weight_kg), "kg<br>VO2 Peak Predicted:",
-    #                               sprintf("%.2f", VO2_peak.wasserman_actual), "ml/min<br>Percent Predicted:",
-    #                               sprintf("%.2f%%", (measured_VO2 / VO2_peak.wasserman_actual * 100)))), color = "blue", size = 5) +
-    #   labs(y = "VO2 Peak Predicted ml/min", x = "Weight (kg)", caption = "Blue Dot = VO2 @ Actual Weight | Red Dot = VO2 @ Ideal Weight") +
-    #   geom_vline(xintercept = data$slider_weight, linetype = "dashed", color = "black") +
-    #   scale_y_continuous(
-    #     limits = c(1000, 6000),
-    #     breaks = seq(1000, 6000, by = 1000),  # Major breaks
-    #     minor_breaks = seq(1500, 5500, by = 1000)
-    #   ) +
-    #   theme_grey() +
-    #   theme(
-    #     axis.text = element_text(face = "bold", size = 12),
-    #     axis.title = element_text(face = "bold", size = 14),
-    #     plot.caption = element_text(size = 12),
-    #     panel.grid.minor = element_line(size = 0.5, linetype = 'solid', colour = "gray50")
-    #   )
-    # 
-    
-    
-    
-    wasserman_Plot <-  ggplot(data) +
-      geom_line(data = filter(data, Age_Group == "Current Age"), aes(x = weight_assumed_kg, y = VO2_peak_assumed, color = Age_Group), linewidth = 1.2) +
-      
-      geom_point(data = filter(data, Age_Group == "Current Age"),
-                 aes(x = weight_ideal, y = VO2_peak_ideal,
-                     text = paste("Ideal Weight:", sprintf("%.2f", weight_ideal), "kg<br>VO2 Peak Predicted:",
-                                  sprintf("%.2f", VO2_peak_ideal), "ml/min<br>Percent Predicted:",
-                                  sprintf("%.2f%%", (measured_VO2 / VO2_peak_ideal * 100)))), color = "red", size = 5) +
-      geom_point(data = filter(data, Age_Group == "Current Age"),
-                 aes(x = weight_kg, y = VO2_peak_actual,
-                     text = paste("Measured Weight:", sprintf("%.2f", weight_kg), "kg<br>VO2 Peak Predicted:",
-                                  sprintf("%.2f", VO2_peak_actual), "ml/min<br>Percent Predicted:",
-                                  sprintf("%.2f%%", (measured_VO2 / VO2_peak_actual * 100)))), color = "blue", size = 5) +
-      
-      geom_line(data = filter(data, Age_Group != "Current Age"), aes(x = weight_assumed_kg, y = VO2_peak_assumed, color = Age_Group), linetype = "dashed") +
-      
-      labs(y = "VO2 Peak Predicted ml/min", x = "Weight (kg)", color = "Age Groups") +
-      geom_vline(xintercept = data$slider_weight, linetype = "dashed", color = "black") +
-      scale_y_continuous(
-        limits = c(1000, 6000),
-        breaks = seq(1000, 6000, by = 1000),  # Major breaks
-        minor_breaks = seq(1500, 5500, by = 1000)
-      ) +
-      theme_grey() +
-      scale_color_manual(values = c(
-        "Current Age" = "black", 
-        "Age + 5"     = "#7AA6DCFF",
-        "Age + 10"    = "#EFC000FF",
-        "Age + 15"    = "#868686FF",
-        "Age - 5"     = "#CD534CFF",
-        "Age - 10"    = "#8F7700FF",
-        "Age - 15"    = "#003C67FF")) +
-      theme(
-        axis.text = element_text(face = "bold", size = 12),
-        axis.title = element_text(face = "bold", size = 14),
-        plot.caption = element_text(size = 12),
-        panel.grid.minor = element_line(size = 0.5, linetype = 'solid', colour = "gray50"),
-        legend.position= "bottom"
-      )
-    
-    
-    # Convert to Plotly and specify tooltip information
-    wasserman_Plot <- ggplotly(wasserman_Plot, tooltip = "text", dynamicTicks= TRUE)
-    wasserman_Plot
-    
-    # data %>%
-    #   ggplot() +
-    #   geom_line(aes(x = weight_assumed_kg, y = VO2_peak.wasserman_assumed)) +
-    #   geom_point(aes(x = weight_ideal, y = VO2_peak.wasserman_ideal), color = "red", size = 5) +
-    #   geom_point(aes(x = weight_kg, y = VO2_peak.wasserman_actual ), color = "blue", size = 5) +
-    #   labs(y = "VO2 Peak Predicted ml/min", x = "Weight (kg)", caption = "Blue Dot = VO2 @ Actual Weight | Red Dot = VO2 @ Ideal Weight")  +
-    #   geom_vline(xintercept = data$slider_weight, linetype = "dashed", color = "black") +
-    #   scale_y_continuous(limits = c(1000, 6000), breaks = seq(1000, 6000, by = 1000)) +
-    #   scale_color_jco() +
-    #   theme_grey() +
-    #   scale_fill_jco() +
-    #   theme(
-    #     axis.text =  element_text(face = "bold", size = 12),
-    #     axis.title = element_text(face = "bold", size = 14),
-    #     plot.caption = element_text(size = 12))
+    generateWassermanplot(input,plot_type = "interactive")
     
   })
   
   output$hansenPlot <- renderPlotly({
-    
-    # Plotting code for Friend equation
-    
-    data <- data.frame(
-      weight_assumed_kg = seq(from = 50, to = 150, by = 1),
-      gender = input$gender,
-      Mode = input$mode,
-      weight_kg = input$weight,
-      height_cm = input$height,
-      age = input$age,
-      age_Plus5= input$age + 5,
-      age_Plus10= input$age + 10,
-      age_Plus15= input$age + 15,
-      age_Minus5= input$age - 5,
-      age_Minus10= input$age - 10,
-      age_Minus15= input$age - 15,
-      measured_VO2 = input$measuredVO2
-    )
-    
-    data <- data %>%
-      mutate(
-        slider_weight = input$SliderBMI * ((height_cm/100) * (height_cm/100)))
-    
-    # Convert weight and height to lbs and inches for FRIEND equation
-    data <- data %>%
-      mutate(
-        weight_lbs = weight_kg * 2.20462,
-        height_in = height_cm / 2.54,
-        weight_ideal = case_when(
-          gender == "Male" ~ 0.79 * height_cm - 60.7,
-          gender == "Female" ~ 0.65 * height_cm - 42.8,
-          TRUE ~ NA_real_
-        )
-      )
-    
-    data <- data %>% 
-      pivot_longer(
-        cols = c(age, age_Plus5, age_Plus10, age_Plus15, age_Minus5, age_Minus10,age_Minus15),
-        names_to = "Age_Group",
-        values_to = "age"
-      )
-    
-    data <- data %>%
-      mutate(cycle_factor = case_when(
-      gender == "Male" ~ 50.72 - 0.372 * age,
-      gender == "Female" ~ 22.78 - 0.17 * age,
-      TRUE ~ NA_real_
-    ))
-    
-    data <- data %>%
-      mutate(
-        VO2_peak_assumed = case_when(
-          gender == "Male" & Mode == "Bike" & weight_assumed_kg < weight_ideal ~ (((weight_ideal + weight_assumed_kg) / 2) * cycle_factor),
-          gender == "Male" & Mode == "Bike" & weight_assumed_kg == weight_ideal ~ (weight_assumed_kg * cycle_factor),
-          gender == "Male" & Mode == "Bike" & weight_assumed_kg > weight_ideal ~ ((weight_ideal * cycle_factor) + 6 * (weight_assumed_kg - weight_ideal)),
-          
-          gender == "Male" & Mode == "Treadmill" & weight_assumed_kg < weight_ideal ~ (((weight_ideal + weight_assumed_kg) / 2) * cycle_factor) * 1.11,
-          gender == "Male" & Mode == "Treadmill" & weight_assumed_kg == weight_ideal ~ (weight_assumed_kg * cycle_factor) * 1.11,
-          gender == "Male" & Mode == "Treadmill" & weight_assumed_kg > weight_ideal ~ ((weight_ideal * cycle_factor) + 6 * (weight_assumed_kg - weight_ideal)) * 1.11,
-          
-          gender == "Female" & Mode == "Bike" & weight_assumed_kg < weight_ideal ~ (((weight_ideal + weight_assumed_kg + 86) / 2) * cycle_factor),
-          gender == "Female" & Mode == "Bike" & weight_assumed_kg == weight_ideal ~ ((weight_assumed_kg + 43) * cycle_factor),
-          gender == "Female" & Mode == "Bike" & weight_assumed_kg > weight_ideal ~ (((weight_ideal + 43) * cycle_factor) + 6 * (weight_assumed_kg - weight_ideal)),
-          
-          gender == "Female" & Mode == "Treadmill" & weight_assumed_kg < weight_ideal ~ (((weight_ideal + weight_assumed_kg + 86) / 2) * cycle_factor) * 1.11,
-          gender == "Female" & Mode == "Treadmill" & weight_assumed_kg == weight_ideal ~ ((weight_assumed_kg + 43) * cycle_factor) * 1.11,
-          gender == "Female" & Mode == "Treadmill" & weight_assumed_kg > weight_ideal ~ (((weight_ideal + 43) * cycle_factor) + 6 * (weight_assumed_kg - weight_ideal)) * 1.11,
-          TRUE ~ NA_real_),
-        
-        
-        VO2_peak_ideal = case_when(
-          gender == "Male" & Mode == "Bike" ~ (weight_ideal * cycle_factor),
-          gender == "Male" & Mode == "Treadmill" ~ (weight_ideal * cycle_factor) * 1.11,
-          
-          gender == "Female" & Mode == "Bike" ~ ((weight_ideal + 43) * cycle_factor),
-          gender == "Female" & Mode == "Treadmill"  ~ ((weight_ideal + 43) * cycle_factor) * 1.11,
-          TRUE ~ NA_real_),
-        
-        
-        VO2_peak_actual = case_when(#(ml/min)
-          gender == "Male" & Mode == "Bike" & weight_kg < weight_ideal ~ (((weight_ideal + weight_kg) / 2) * cycle_factor),
-          gender == "Male" & Mode == "Bike" & weight_kg == weight_ideal ~ (weight_kg * cycle_factor),
-          gender == "Male" & Mode == "Bike" & weight_kg > weight_ideal ~ ((weight_ideal * cycle_factor) + 6 * (weight_kg - weight_ideal)),
-          
-          gender == "Male" & Mode == "Treadmill" & weight_kg < weight_ideal ~ (((weight_ideal + weight_kg) / 2) * cycle_factor) * 1.11,
-          gender == "Male" & Mode == "Treadmill" & weight_kg == weight_ideal ~ (weight_kg * cycle_factor) * 1.11,
-          gender == "Male" & Mode == "Treadmill" & weight_kg > weight_ideal ~ ((weight_ideal * cycle_factor) + 6 * (weight_kg - weight_ideal)) * 1.11,
-          
-          gender == "Female" & Mode == "Bike" & weight_kg < weight_ideal ~ (((weight_ideal + weight_kg + 86) / 2) * cycle_factor),
-          gender == "Female" & Mode == "Bike" & weight_kg == weight_ideal ~ ((weight_kg + 43) * cycle_factor),
-          gender == "Female" & Mode == "Bike" & weight_kg > weight_ideal ~ (((weight_ideal + 43) * cycle_factor) + 6 * (weight_kg - weight_ideal)),
-          
-          gender == "Female" & Mode == "Treadmill" & weight_kg < weight_ideal ~ (((weight_ideal + weight_kg + 86) / 2) * cycle_factor) * 1.11,
-          gender == "Female" & Mode == "Treadmill" & weight_kg == weight_ideal ~ ((weight_kg + 43) * cycle_factor) * 1.11,
-          gender == "Female" & Mode == "Treadmill" & weight_kg > weight_ideal ~ (((weight_ideal + 43) * cycle_factor) + 6 * (weight_kg - weight_ideal)) * 1.11,
-          TRUE ~ NA_real_)
-      )
-    
-    data <- data %>% 
-      mutate(Age_Group = case_when(
-        Age_Group == "age" ~ "Current Age",
-        Age_Group == "age_Plus5" ~ "Age + 5",
-        Age_Group == "age_Plus10" ~ "Age + 10",
-        Age_Group == "age_Plus15" ~ "Age + 15",
-        Age_Group == "age_Minus5"~ "Age - 5",
-        Age_Group == "age_Minus10" ~ "Age - 10",
-        Age_Group == "age_Minus15" ~ "Age - 15"))
-    
-    
-    
-    # Hansen_Plot <- ggplot(data) +
-    #   geom_line(aes(x = weight_assumed_kg, y = VO2_peak_Hansen_assumed), color = "black") +
-    #   geom_point(aes(x = weight_ideal, y = VO2_peak_Hansen_ideal,
-    #                  text = paste("Ideal Weight:", sprintf("%.2f", weight_ideal), "kg<br>VO2 Peak Predicted:",
-    #                               sprintf("%.2f", VO2_peak_Hansen_ideal), "ml/min<br>Percent Predicted:",
-    #                               sprintf("%.2f%%", (measured_VO2 / VO2_peak_Hansen_ideal * 100)))), color = "red", size = 5) +
-    #   geom_point(aes(x = weight_kg, y = VO2_peak_Hansen_actual,
-    #                  text = paste("Measured Weight:", sprintf("%.2f", weight_kg), "kg<br>VO2 Peak Predicted:",
-    #                               sprintf("%.2f", VO2_peak_Hansen_actual), "ml/min<br>Percent Predicted:",
-    #                               sprintf("%.2f%%", (measured_VO2 / VO2_peak_Hansen_actual * 100)))), color = "blue", size = 5) +
-    #   labs(y = "VO2 Peak Predicted ml/min", x = "Weight (kg)", caption = "Blue Dot = VO2 @ Actual Weight | Red Dot = VO2 @ Ideal Weight") +
-    #   geom_vline(xintercept = data$slider_weight, linetype = "dashed", color = "black") +
-    #   scale_y_continuous(
-    #     limits = c(1000, 6000),
-    #     breaks = seq(1000, 6000, by = 1000),  # Major breaks
-    #     minor_breaks = seq(1500, 5500, by = 1000)
-    #   ) +
-    #   theme_grey() +
-    #   theme(
-    #     axis.text = element_text(face = "bold", size = 12),
-    #     axis.title = element_text(face = "bold", size = 14),
-    #     plot.caption = element_text(size = 12),
-    #     panel.grid.minor = element_line(size = 0.5, linetype = 'solid', colour = "gray50")
-    #   )
-    
-    
-    Hansen_Plot <- ggplot(data) +
-      geom_line(data = filter(data, Age_Group == "Current Age"), aes(x = weight_assumed_kg, y = VO2_peak_assumed, color = Age_Group), linewidth = 1.2) +
-      
-      geom_point(data = filter(data, Age_Group == "Current Age"),
-                 aes(x = weight_ideal, y = VO2_peak_ideal,
-                     text = paste("Ideal Weight:", sprintf("%.2f", weight_ideal), "kg<br>VO2 Peak Predicted:",
-                                  sprintf("%.2f", VO2_peak_ideal), "ml/min<br>Percent Predicted:",
-                                  sprintf("%.2f%%", (measured_VO2 / VO2_peak_ideal * 100)))), color = "red", size = 5) +
-      geom_point(data = filter(data, Age_Group == "Current Age"),
-                 aes(x = weight_kg, y = VO2_peak_actual,
-                     text = paste("Measured Weight:", sprintf("%.2f", weight_kg), "kg<br>VO2 Peak Predicted:",
-                                  sprintf("%.2f", VO2_peak_actual), "ml/min<br>Percent Predicted:",
-                                  sprintf("%.2f%%", (measured_VO2 / VO2_peak_actual * 100)))), color = "blue", size = 5) +
-      
-      geom_line(data = filter(data, Age_Group != "Current Age"), aes(x = weight_assumed_kg, y = VO2_peak_assumed, color = Age_Group), linetype = "dashed") +
-      
-      labs(y = "VO2 Peak Predicted ml/min", x = "Weight (kg)", color = "Age Groups") +
-      geom_vline(xintercept = data$slider_weight, linetype = "dashed", color = "black") +
-      scale_y_continuous(
-        limits = c(1000, 6000),
-        breaks = seq(1000, 6000, by = 1000),  # Major breaks
-        minor_breaks = seq(1500, 5500, by = 1000)
-      ) +
-      theme_grey() +
-      scale_color_manual(values = c(
-        "Current Age" = "black", 
-        "Age + 5"     = "#7AA6DCFF",
-        "Age + 10"    = "#EFC000FF",
-        "Age + 15"    = "#868686FF",
-        "Age - 5"     = "#CD534CFF",
-        "Age - 10"    = "#8F7700FF",
-        "Age - 15"    = "#003C67FF")) +
-      theme(
-        axis.text = element_text(face = "bold", size = 12),
-        axis.title = element_text(face = "bold", size = 14),
-        plot.caption = element_text(size = 12),
-        panel.grid.minor = element_line(size = 0.5, linetype = 'solid', colour = "gray50"),
-        legend.position= "bottom"
-      )
-    
-    
-    # Convert to Plotly and specify tooltip information
-    Hansen_Plot <- ggplotly(Hansen_Plot, tooltip = "text", dynamicTicks= TRUE)
-    Hansen_Plot
-    
-    # data %>%
-    #   ggplot() +
-    #   geom_line(aes(x = weight_assumed_kg, y = VO2_peak_Hansen_assumed)) +
-    #   geom_point(aes(x = weight_ideal,y = VO2_peak_Hansen_ideal), color = "red", size = 5) +
-    #   geom_point(aes(x = weight_kg,y = VO2_peak_Hansen_actual ), color = "blue", size = 5) +
-    #   geom_vline(xintercept = data$slider_weight, linetype = "dashed", color = "black") +
-    #   scale_y_continuous(limits = c(1000, 6000), breaks = seq(1000, 6000, by = 1000)) +
-    #   labs(y = "VO2 Peak Predicted ml/min", x = "Weight (kg)", caption = "Blue Dot = VO2 @ Actual Weight | Red Dot = VO2 @ Ideal Weight")  +
-    #   scale_color_jco() +
-    #   theme_grey() +
-    #   scale_fill_jco() +
-    #   theme(
-    #     axis.text =  element_text(face = "bold", size = 12),
-    #     axis.title = element_text(face = "bold", size = 14),
-    #     plot.caption = element_text(size = 12))
-    # 
-    # 
-    
+    generateHansenplot(input,plot_type = "interactive")
   })
   
   output$BrucePlot <- renderPlotly({
-    
-    # Plotting code for Friend equation
-    
-    data <- data.frame(
-      weight_assumed_kg = seq(from = 50, to = 150, by = 1),
-      gender = input$gender,
-      Mode = input$mode,
-      weight_kg = input$weight,
-      height_cm = input$height,
-      age = input$age,
-      age_Plus5= input$age + 5,
-      age_Plus10= input$age + 10,
-      age_Plus15= input$age + 15,
-      age_Minus5= input$age - 5,
-      age_Minus10= input$age - 10,
-      age_Minus15= input$age - 15,
-      measured_VO2 = input$measuredVO2
-    )
-    
-    data <- data %>%
-      mutate(
-        slider_weight = input$SliderBMI * ((height_cm/100) * (height_cm/100)))
-    
-    # Convert weight and height to lbs and inches for FRIEND equation
-    data <- data %>%
-      mutate(
-        weight_lbs = weight_kg * 2.20462,
-        height_in = height_cm / 2.54,
-        weight_ideal = case_when(
-          gender == "Male" ~ 0.79 * height_cm - 60.7,
-          gender == "Female" ~ 0.65 * height_cm - 42.8,
-          TRUE ~ NA_real_
-        ),
-        cycle_factor = case_when(
-          gender == "Male" ~ 50.72 - 0.372 * age,
-          gender == "Female" ~ 22.78 - 0.17 * age,
-          TRUE ~ NA_real_
-        )
-      )
-    
-    
-    data <- data %>% 
-      pivot_longer(
-        cols = c(age, age_Plus5, age_Plus10, age_Plus15, age_Minus5, age_Minus10,age_Minus15),
-        names_to = "Age_Group",
-        values_to = "age"
-      )
-    
-    #corrected for Mode: 0.89 * for bike
-    
-    data <- data %>%
-      mutate(
-        
-        
-        VO2_peak_assumed = case_when(
-          gender == "Male" & Mode == "Treadmill" ~ ((60 - (0.55* age)) * (weight_assumed_kg)), 
-          gender == "Female" & Mode == "Treadmill" ~ ((48 - (0.37 * age)) * (weight_assumed_kg)),
-          gender == "Male" & Mode == "Bike" ~ (((60 - (0.55* age)) * (weight_assumed_kg)) * 0.89), 
-          gender == "Female" & Mode == "Bike" ~ (((48 - (0.37 * age)) * (weight_assumed_kg)) * 0.89),
-          TRUE ~ NA_real_),
-        
-        
-        VO2_peak_ideal = case_when(
-          gender == "Male" & Mode == "Treadmill" ~ ((60 - (0.55* age)) * (weight_ideal)), 
-          gender == "Female" & Mode == "Treadmill" ~ ((48 - (0.37 * age)) * (weight_ideal)),
-          gender == "Male" & Mode == "Bike" ~ (((60 - (0.55* age)) * (weight_ideal)) * 0.89), 
-          gender == "Female" & Mode == "Bike" ~ (((48 - (0.37 * age)) * (weight_ideal)) * 0.89),
-          TRUE ~ NA_real_),
-        
-        
-        VO2_peak_actual = case_when(#(ml/min)
-          gender == "Male" & Mode == "Treadmill" ~ ((60 - (0.55* age)) * (weight_kg)), 
-          gender == "Female" & Mode == "Treadmill" ~ ((48 - (0.37 * age)) * (weight_kg)),
-          gender == "Male" & Mode == "Bike" ~ (((60 - (0.55* age)) * (weight_kg)) * 0.89), 
-          gender == "Female" & Mode == "Bike" ~ (((48 - (0.37 * age)) * (weight_kg)) * 0.89),
-          TRUE ~ NA_real_)
-      )
-    
-    data <- data %>% 
-      mutate(Age_Group = case_when(
-        Age_Group == "age" ~ "Current Age",
-        Age_Group == "age_Plus5" ~ "Age + 5",
-        Age_Group == "age_Plus10" ~ "Age + 10",
-        Age_Group == "age_Plus15" ~ "Age + 15",
-        Age_Group == "age_Minus5"~ "Age - 5",
-        Age_Group == "age_Minus10" ~ "Age - 10",
-        Age_Group == "age_Minus15" ~ "Age - 15"))
-    
-    
-    # Bruce_Plot <- ggplot(data) +
-    #   geom_line(aes(x = weight_assumed_kg, y = VO2_peak_Bruce_assumed), color = "black") +
-    #   geom_point(aes(x = weight_ideal, y = VO2_peak_Bruce_ideal,
-    #                  text = paste("Ideal Weight:", sprintf("%.2f", weight_ideal), "kg<br>VO2 Peak Predicted:",
-    #                               sprintf("%.2f", VO2_peak_Bruce_ideal), "ml/min<br>Percent Predicted:",
-    #                               sprintf("%.2f%%", (measured_VO2 / VO2_peak_Bruce_ideal * 100)))), color = "red", size = 5) +
-    #   geom_point(aes(x = weight_kg, y = VO2_peak_Bruce_actual,
-    #                  text = paste("Measured Weight:", sprintf("%.2f", weight_kg), "kg<br>VO2 Peak Predicted:",
-    #                               sprintf("%.2f", VO2_peak_Bruce_actual), "ml/min<br>Percent Predicted:",
-    #                               sprintf("%.2f%%", (measured_VO2 / VO2_peak_Bruce_actual * 100)))), color = "blue", size = 5) +
-    #   labs(y = "VO2 Peak Predicted ml/min", x = "Weight (kg)", caption = "Blue Dot = VO2 @ Actual Weight | Red Dot = VO2 @ Ideal Weight") +
-    #   geom_vline(xintercept = data$slider_weight, linetype = "dashed", color = "black") +
-    #   scale_y_continuous(
-    #     limits = c(1000, 6000),
-    #     breaks = seq(1000, 6000, by = 1000),  # Major breaks
-    #     minor_breaks = seq(1500, 5500, by = 1000)
-    #   ) +
-    #   theme_grey() +
-    #   theme(
-    #     axis.text = element_text(face = "bold", size = 12),
-    #     axis.title = element_text(face = "bold", size = 14),
-    #     plot.caption = element_text(size = 12),
-    #     panel.grid.minor = element_line(size = 0.5, linetype = 'solid', colour = "gray50")
-    #   )
-    
-    
-    Bruce_Plot <- ggplot(data) +
-      geom_line(data = filter(data, Age_Group == "Current Age"), aes(x = weight_assumed_kg, y = VO2_peak_assumed, color = Age_Group), linewidth = 1.2) +
-      
-      geom_point(data = filter(data, Age_Group == "Current Age"),
-                 aes(x = weight_ideal, y = VO2_peak_ideal,
-                     text = paste("Ideal Weight:", sprintf("%.2f", weight_ideal), "kg<br>VO2 Peak Predicted:",
-                                  sprintf("%.2f", VO2_peak_ideal), "ml/min<br>Percent Predicted:",
-                                  sprintf("%.2f%%", (measured_VO2 / VO2_peak_ideal * 100)))), color = "red", size = 5) +
-      geom_point(data = filter(data, Age_Group == "Current Age"),
-                 aes(x = weight_kg, y = VO2_peak_actual,
-                     text = paste("Measured Weight:", sprintf("%.2f", weight_kg), "kg<br>VO2 Peak Predicted:",
-                                  sprintf("%.2f", VO2_peak_actual), "ml/min<br>Percent Predicted:",
-                                  sprintf("%.2f%%", (measured_VO2 / VO2_peak_actual * 100)))), color = "blue", size = 5) +
-      
-      geom_line(data = filter(data, Age_Group != "Current Age"), aes(x = weight_assumed_kg, y = VO2_peak_assumed, color = Age_Group), linetype = "dashed") +
-      
-      labs(y = "VO2 Peak Predicted ml/min", x = "Weight (kg)", color = "Age Groups") +
-      geom_vline(xintercept = data$slider_weight, linetype = "dashed", color = "black") +
-      scale_y_continuous(
-        limits = c(1000, 6000),
-        breaks = seq(1000, 6000, by = 1000),  # Major breaks
-        minor_breaks = seq(1500, 5500, by = 1000)
-      ) +
-      theme_grey() +
-      scale_color_manual(values = c(
-        "Current Age" = "black", 
-        "Age + 5"     = "#7AA6DCFF",
-        "Age + 10"    = "#EFC000FF",
-        "Age + 15"    = "#868686FF",
-        "Age - 5"     = "#CD534CFF",
-        "Age - 10"    = "#8F7700FF",
-        "Age - 15"    = "#003C67FF")) +
-      theme(
-        axis.text = element_text(face = "bold", size = 12),
-        axis.title = element_text(face = "bold", size = 14),
-        plot.caption = element_text(size = 12),
-        panel.grid.minor = element_line(size = 0.5, linetype = 'solid', colour = "gray50"),
-        legend.position= "bottom"
-      )
-    
-    # Convert to Plotly and specify tooltip information
-    Bruce_Plot <- ggplotly(Bruce_Plot, tooltip = "text", dynamicTicks= TRUE)
-    Bruce_Plot
-    
-    # data %>%
-    #   ggplot() +
-    #   geom_line(aes(x = weight_assumed_kg, y = VO2_peak_Bruce_assumed)) +
-    #   geom_point(aes(x = weight_ideal, y = VO2_peak_Bruce_ideal), color = "red", size = 5) +
-    #   geom_point(aes(x = weight_kg, y = VO2_peak_Bruce_actual ), color = "blue", size = 5) +
-    #   geom_vline(xintercept = data$slider_weight, linetype = "dashed", color = "black") +
-    #   scale_y_continuous(limits = c(1000, 6000), breaks = seq(1000, 6000, by = 1000)) +
-    #   labs(y = "VO2 Peak Predicted ml/min", x = "Weight (kg)", caption = "Blue Dot = VO2 @ Actual Weight | Red Dot = VO2 @ Ideal Weight")  +
-    #   scale_color_jco() +
-    #   theme_grey() +
-    #   scale_fill_jco() +
-    #   theme(
-    #     axis.text =  element_text(face = "bold", size = 12),
-    #     axis.title = element_text(face = "bold", size = 14),
-    #     plot.caption = element_text(size = 12))
-    
-    
-    
+    generateBruceplot(input,plot_type = "interactive")
   })
   
   output$jones2Plot <- renderPlotly({
-    
-    # Plotting code for Friend equation
-    
-    data <- data.frame(
-      weight_assumed_kg = seq(from = 50, to = 150, by = 1),
-      gender = input$gender,
-      Mode = input$mode,
-      weight_kg = input$weight,
-      height_cm = input$height,
-      age = input$age,
-      age_Plus5= input$age + 5,
-      age_Plus10= input$age + 10,
-      age_Plus15= input$age + 15,
-      age_Minus5= input$age - 5,
-      age_Minus10= input$age - 10,
-      age_Minus15= input$age - 15,
-      measured_VO2 = input$measuredVO2
-    )
-    
-    data <- data %>%
-      mutate(
-        slider_weight = input$SliderBMI * ((height_cm/100) * (height_cm/100)))
-    
-    # Convert weight and height to lbs and inches for FRIEND equation
-    data <- data %>%
-      mutate(
-        weight_lbs = weight_kg * 2.20462,
-        height_in = height_cm / 2.54,
-        weight_ideal = case_when(
-          gender == "Male" ~ 0.79 * height_cm - 60.7,
-          gender == "Female" ~ 0.65 * height_cm - 42.8,
-          TRUE ~ NA_real_
-        ),
-        cycle_factor = case_when(
-          gender == "Male" ~ 50.72 - 0.372 * age,
-          gender == "Female" ~ 22.78 - 0.17 * age,
-          TRUE ~ NA_real_
-        )
-      )
-    
-    # corrected for mode: 1.11 for tread
-    
-    data <- data %>% 
-      pivot_longer(
-        cols = c(age, age_Plus5, age_Plus10, age_Plus15, age_Minus5, age_Minus10,age_Minus15),
-        names_to = "Age_Group",
-        values_to = "age"
-      )
-    
-    
-    
-    data <- data %>%
-      mutate(
-        VO2_peak_assumed = case_when(
-          gender == "Male" & Mode == "Treadmill" ~ (((-3.76 + 0.034 * height_cm + 0.022 * weight_assumed_kg - 0.028 * age) * 1000) * 1.11), 
-          gender == "Female" & Mode == "Treadmill" ~ (((-2.26 + 0.025 * height_cm + 0.01 * weight_assumed_kg - 0.018 * age) * 1000) * 1.11),
-          gender == "Male" & Mode == "Bike" ~ (-3.76 + 0.034 * height_cm + 0.022 * weight_assumed_kg - 0.028 * age) * 1000, 
-          gender == "Female" & Mode == "Bike" ~ (-2.26 + 0.025 * height_cm + 0.01 * weight_assumed_kg - 0.018 * age) * 1000,
-          TRUE ~ NA_real_),
-        
-        
-        VO2_peak_ideal = case_when(
-          gender == "Male" & Mode == "Treadmill" ~ (((-3.76 + 0.034 * height_cm + 0.022 * weight_ideal - 0.028 * age) * 1000) * 1.11), 
-          gender == "Female" & Mode == "Treadmill" ~ (((-2.26 + 0.025 * height_cm + 0.01 * weight_ideal - 0.018 * age) * 1000) * 1.11),
-          gender == "Male" & Mode == "Bike" ~ (-3.76 + 0.034 * height_cm + 0.022 * weight_ideal - 0.028 * age) * 1000, 
-          gender == "Female" & Mode == "Bike" ~ (-2.26 + 0.025 * height_cm + 0.01 * weight_ideal - 0.018 * age) * 1000,
-          TRUE ~ NA_real_),
-        
-        
-        VO2_peak_actual = case_when(#(ml/min)
-          gender == "Male" & Mode == "Treadmill" ~ (((-3.76 + 0.034 * height_cm + 0.022 * weight_kg - 0.028 * age) * 1000) * 1.11), 
-          gender == "Female"& Mode == "Treadmill" ~ (((-2.26 + 0.025 * height_cm + 0.01 * weight_kg - 0.018 * age) * 1000) * 1.11),
-          gender == "Male" & Mode == "Bike" ~ (-3.76 + 0.034 * height_cm + 0.022 * weight_kg - 0.028 * age) * 1000, 
-          gender == "Female"& Mode == "Bike" ~ (-2.26 + 0.025 * height_cm + 0.01 * weight_kg - 0.018 * age) * 1000,
-          TRUE ~ NA_real_)
-      )
-    
-    data <- data %>% 
-      mutate(Age_Group = case_when(
-        Age_Group == "age" ~ "Current Age",
-        Age_Group == "age_Plus5" ~ "Age + 5",
-        Age_Group == "age_Plus10" ~ "Age + 10",
-        Age_Group == "age_Plus15" ~ "Age + 15",
-        Age_Group == "age_Minus5"~ "Age - 5",
-        Age_Group == "age_Minus10" ~ "Age - 10",
-        Age_Group == "age_Minus15" ~ "Age - 15"))
-    
-    # Jones2_Plot <- ggplot(data) +
-    #   geom_line(aes(x = weight_assumed_kg, y = VO2_peak_Jones2_assumed), color = "black") +
-    #   geom_point(aes(x = weight_ideal, y = VO2_peak_Jones2_ideal,
-    #                  text = paste("Ideal Weight:", sprintf("%.2f", weight_ideal), "kg<br>VO2 Peak Predicted:",
-    #                               sprintf("%.2f", VO2_peak_Jones2_ideal), "ml/min<br>Percent Predicted:",
-    #                               sprintf("%.2f%%", (measured_VO2 / VO2_peak_Jones2_ideal * 100)))), color = "red", size = 5) +
-    #   geom_point(aes(x = weight_kg, y = VO2_peak_Jones2_actual,
-    #                  text = paste("Measured Weight:", sprintf("%.2f", weight_kg), "kg<br>VO2 Peak Predicted:",
-    #                               sprintf("%.2f", VO2_peak_Jones2_actual), "ml/min<br>Percent Predicted:",
-    #                               sprintf("%.2f%%", (measured_VO2 / VO2_peak_Jones2_actual * 100)))), color = "blue", size = 5) +
-    #   labs(y = "VO2 Peak Predicted ml/min", x = "Weight (kg)", caption = "Blue Dot = VO2 @ Actual Weight | Red Dot = VO2 @ Ideal Weight") +
-    #   geom_vline(xintercept = data$slider_weight, linetype = "dashed", color = "black") +
-    #   scale_y_continuous(
-    #     limits = c(1000, 6000),
-    #     breaks = seq(1000, 6000, by = 1000),  # Major breaks
-    #     minor_breaks = seq(1500, 5500, by = 1000)
-    #   ) +
-    #   theme_grey() +
-    #   theme(
-    #     axis.text = element_text(face = "bold", size = 12),
-    #     axis.title = element_text(face = "bold", size = 14),
-    #     plot.caption = element_text(size = 12),
-    #     panel.grid.minor = element_line(size = 0.5, linetype = 'solid', colour = "gray50")
-    #   )
-    
-    
-    Jones2_Plot <- ggplot(data) +
-      geom_line(data = filter(data, Age_Group == "Current Age"), aes(x = weight_assumed_kg, y = VO2_peak_assumed, color = Age_Group), linewidth = 1.2) +
-      
-      geom_point(data = filter(data, Age_Group == "Current Age"),
-                 aes(x = weight_ideal, y = VO2_peak_ideal,
-                     text = paste("Ideal Weight:", sprintf("%.2f", weight_ideal), "kg<br>VO2 Peak Predicted:",
-                                  sprintf("%.2f", VO2_peak_ideal), "ml/min<br>Percent Predicted:",
-                                  sprintf("%.2f%%", (measured_VO2 / VO2_peak_ideal * 100)))), color = "red", size = 5) +
-      geom_point(data = filter(data, Age_Group == "Current Age"),
-                 aes(x = weight_kg, y = VO2_peak_actual,
-                     text = paste("Measured Weight:", sprintf("%.2f", weight_kg), "kg<br>VO2 Peak Predicted:",
-                                  sprintf("%.2f", VO2_peak_actual), "ml/min<br>Percent Predicted:",
-                                  sprintf("%.2f%%", (measured_VO2 / VO2_peak_actual * 100)))), color = "blue", size = 5) +
-      
-      geom_line(data = filter(data, Age_Group != "Current Age"), aes(x = weight_assumed_kg, y = VO2_peak_assumed, color = Age_Group), linetype = "dashed") +
-      
-      labs(y = "VO2 Peak Predicted ml/min", x = "Weight (kg)", color = "Age Groups") +
-      geom_vline(xintercept = data$slider_weight, linetype = "dashed", color = "black") +
-      scale_y_continuous(
-        limits = c(1000, 6000),
-        breaks = seq(1000, 6000, by = 1000),  # Major breaks
-        minor_breaks = seq(1500, 5500, by = 1000)
-      ) +
-      theme_grey() +
-      scale_color_manual(values = c(
-        "Current Age" = "black", 
-        "Age + 5"     = "#7AA6DCFF",
-        "Age + 10"    = "#EFC000FF",
-        "Age + 15"    = "#868686FF",
-        "Age - 5"     = "#CD534CFF",
-        "Age - 10"    = "#8F7700FF",
-        "Age - 15"    = "#003C67FF")) +
-      theme(
-        axis.text = element_text(face = "bold", size = 12),
-        axis.title = element_text(face = "bold", size = 14),
-        plot.caption = element_text(size = 12),
-        panel.grid.minor = element_line(size = 0.5, linetype = 'solid', colour = "gray50"),
-        legend.position= "bottom"
-      )
-    
-    
-    # Convert to Plotly and specify tooltip information
-    Jones2_Plot <- ggplotly(Jones2_Plot, tooltip = "text", dynamicTicks= TRUE)
-    Jones2_Plot
-    
-    
-    # data %>%
-    #   ggplot() +
-    #   geom_line(aes(x = weight_assumed_kg, y = VO2_peak_Jones2_assumed)) +
-    #   geom_point(aes(x = weight_ideal, y = VO2_peak_Jones2_ideal), color = "red", size = 5) +
-    #   geom_point(aes(x = weight_kg, y = VO2_peak_Jones2_actual ), color = "blue", size = 5) +
-    #   geom_vline(xintercept = data$slider_weight, linetype = "dashed", color = "black") +
-    #   scale_y_continuous(limits = c(1000, 6000), breaks = seq(1000, 6000, by = 1000)) +
-    #   labs(y = "VO2 Peak Predicted ml/min", x = "Weight (kg)", caption = "Blue Dot = VO2 @ Actual Weight | Red Dot = VO2 @ Ideal Weight")  +
-    #   scale_color_jco() +
-    #   theme_grey() +
-    #   scale_fill_jco() +
-    #   theme(
-    #     axis.text =  element_text(face = "bold", size = 12),
-    #     axis.title = element_text(face = "bold", size = 14),
-    #     plot.caption = element_text(size = 12))
-    # 
-    
-    
+    generateJonesplot(input,plot_type = "interactive")
   })
   
   output$NederPlot <- renderPlotly({
-    
-    # Plotting code for Friend equation
-    
-    data <- data.frame(
-      weight_assumed_kg = seq(from = 50, to = 150, by = 1),
-      gender = input$gender,
-      Mode = input$mode,
-      weight_kg = input$weight,
-      height_cm = input$height,
-      age = input$age,
-      age_Plus5= input$age + 5,
-      age_Plus10= input$age + 10,
-      age_Plus15= input$age + 15,
-      age_Minus5= input$age - 5,
-      age_Minus10= input$age - 10,
-      age_Minus15= input$age - 15,
-      measured_VO2 = input$measuredVO2
-    )
-    
-    data <- data %>%
-      mutate(
-        slider_weight = input$SliderBMI * ((height_cm/100) * (height_cm/100)))
-    
-    # Convert weight and height to lbs and inches for FRIEND equation
-    data <- data %>%
-      mutate(
-        weight_lbs = weight_kg * 2.20462,
-        height_in = height_cm / 2.54,
-        weight_ideal = case_when(
-          gender == "Male" ~ 0.79 * height_cm - 60.7,
-          gender == "Female" ~ 0.65 * height_cm - 42.8,
-          TRUE ~ NA_real_
-        ),
-        cycle_factor = case_when(
-          gender == "Male" ~ 50.72 - 0.372 * age,
-          gender == "Female" ~ 22.78 - 0.17 * age,
-          TRUE ~ NA_real_
-        )
-      )
-    
-    # corrected for mode * 1.11
-    data <- data %>% 
-      pivot_longer(
-        cols = c(age, age_Plus5, age_Plus10, age_Plus15, age_Minus5, age_Minus10,age_Minus15),
-        names_to = "Age_Group",
-        values_to = "age"
-      )
-    
-    
-    
-    data <- data %>%
-      mutate(
-        VO2_peak_assumed = case_when(
-          gender == "Male" & Mode == "Treadmill" ~ (((-24.3 * age) + (10.2 * weight_assumed_kg) + (8.3 * height_cm) + 1125) * 1.11), 
-          gender == "Female" & Mode == "Treadmill" ~ (((-13.7 * age) + (10.2 * weight_assumed_kg) + (8.3 * height_cm) + 60) * 1.11),
-          gender == "Male" & Mode == "Bike" ~ ((-24.3 * age) + (10.2 * weight_assumed_kg) + (8.3 * height_cm) + 1125), 
-          gender == "Female" & Mode == "Bike" ~ ((-13.7 * age) + (10.2 * weight_assumed_kg) + (8.3 * height_cm) + 60),
-          TRUE ~ NA_real_),
-        
-        
-        VO2_peak_ideal = case_when(
-          gender == "Male" & Mode == "Treadmill" ~ (((-24.3 * age) + (10.2 * weight_ideal) + (8.3 * height_cm) + 1125) * 1.11), 
-          gender == "Female" & Mode == "Treadmill" ~ (((-13.7 * age) + (10.2 * weight_ideal) + (8.3 * height_cm) + 60) * 1.11),
-          gender == "Male" & Mode == "Bike" ~ ((-24.3 * age) + (10.2 * weight_ideal) + (8.3 * height_cm) + 1125), 
-          gender == "Female" & Mode == "Bike" ~ ((-13.7 * age) + (10.2 * weight_ideal) + (8.3 * height_cm) + 60),
-          TRUE ~ NA_real_),
-        
-        
-        VO2_peak_actual = case_when(
-          gender == "Male" & Mode == "Treadmill" ~ (((-24.3 * age) + (10.2 * weight_kg) + (8.3 * height_cm) + 1125) * 1.11), 
-          gender == "Female" & Mode == "Treadmill" ~ (((-13.7 * age) + (10.2 * weight_kg) + (8.3 * height_cm) + 60) * 1.11),
-          gender == "Male" & Mode == "Bike" ~ ((-24.3 * age) + (10.2 * weight_kg) + (8.3 * height_cm) + 1125), 
-          gender == "Female" & Mode == "Bike" ~ ((-13.7 * age) + (10.2 * weight_kg) + (8.3 * height_cm) + 60),
-          TRUE ~ NA_real_)
-      )
-    
-    data <- data %>% 
-      mutate(Age_Group = case_when(
-        Age_Group == "age" ~ "Current Age",
-        Age_Group == "age_Plus5" ~ "Age + 5",
-        Age_Group == "age_Plus10" ~ "Age + 10",
-        Age_Group == "age_Plus15" ~ "Age + 15",
-        Age_Group == "age_Minus5"~ "Age - 5",
-        Age_Group == "age_Minus10" ~ "Age - 10",
-        Age_Group == "age_Minus15" ~ "Age - 15"))
-    
-    
-    Neder_Plot <- ggplot(data) +
-      geom_line(data = filter(data, Age_Group == "Current Age"), aes(x = weight_assumed_kg, y = VO2_peak_assumed, color = Age_Group), linewidth = 1.2) +
-      
-      geom_point(data = filter(data, Age_Group == "Current Age"),
-                 aes(x = weight_ideal, y = VO2_peak_ideal,
-                     text = paste("Ideal Weight:", sprintf("%.2f", weight_ideal), "kg<br>VO2 Peak Predicted:",
-                                  sprintf("%.2f", VO2_peak_ideal), "ml/min<br>Percent Predicted:",
-                                  sprintf("%.2f%%", (measured_VO2 / VO2_peak_ideal * 100)))), color = "red", size = 5) +
-      geom_point(data = filter(data, Age_Group == "Current Age"),
-                 aes(x = weight_kg, y = VO2_peak_actual,
-                     text = paste("Measured Weight:", sprintf("%.2f", weight_kg), "kg<br>VO2 Peak Predicted:",
-                                  sprintf("%.2f", VO2_peak_actual), "ml/min<br>Percent Predicted:",
-                                  sprintf("%.2f%%", (measured_VO2 / VO2_peak_actual * 100)))), color = "blue", size = 5) +
-      
-      geom_line(data = filter(data, Age_Group != "Current Age"), aes(x = weight_assumed_kg, y = VO2_peak_assumed, color = Age_Group), linetype = "dashed") +
-      
-      labs(y = "VO2 Peak Predicted ml/min", x = "Weight (kg)", color = "Age Groups") +
-      geom_vline(xintercept = data$slider_weight, linetype = "dashed", color = "black") +
-      scale_y_continuous(
-        limits = c(1000, 6000),
-        breaks = seq(1000, 6000, by = 1000),  # Major breaks
-        minor_breaks = seq(1500, 5500, by = 1000)
-      ) +
-      theme_grey() +
-      scale_color_manual(values = c(
-        "Current Age" = "black", 
-        "Age + 5"     = "#7AA6DCFF",
-        "Age + 10"    = "#EFC000FF",
-        "Age + 15"    = "#868686FF",
-        "Age - 5"     = "#CD534CFF",
-        "Age - 10"    = "#8F7700FF",
-        "Age - 15"    = "#003C67FF")) +
-      theme(
-        axis.text = element_text(face = "bold", size = 12),
-        axis.title = element_text(face = "bold", size = 14),
-        plot.caption = element_text(size = 12),
-        panel.grid.minor = element_line(size = 0.5, linetype = 'solid', colour = "gray50"),
-        legend.position= "bottom"
-      )
-    
-    
-    # Convert to Plotly and specify tooltip information
-    Neder_Plot <- ggplotly(Neder_Plot, tooltip = "text", dynamicTicks= TRUE)
-    Neder_Plot
-    
-    
-    # data %>%
-    #   ggplot() +
-    #   geom_line(aes(x = weight_assumed_kg, y = VO2_peak_Jones2_assumed)) +
-    #   geom_point(aes(x = weight_ideal, y = VO2_peak_Jones2_ideal), color = "red", size = 5) +
-    #   geom_point(aes(x = weight_kg, y = VO2_peak_Jones2_actual ), color = "blue", size = 5) +
-    #   geom_vline(xintercept = data$slider_weight, linetype = "dashed", color = "black") +
-    #   scale_y_continuous(limits = c(1000, 6000), breaks = seq(1000, 6000, by = 1000)) +
-    #   labs(y = "VO2 Peak Predicted ml/min", x = "Weight (kg)", caption = "Blue Dot = VO2 @ Actual Weight | Red Dot = VO2 @ Ideal Weight")  +
-    #   scale_color_jco() +
-    #   theme_grey() +
-    #   scale_fill_jco() +
-    #   theme(
-    #     axis.text =  element_text(face = "bold", size = 12),
-    #     axis.title = element_text(face = "bold", size = 14),
-    #     plot.caption = element_text(size = 12))
-    # 
-    
-    
+    generateNederplot(input,plot_type = "interactive")
   })
   
-  # observeEvent(input$showModal, {
-  #   showModal(modalDialog(
-  #     title = "Your Comment or Question",
-  #     textInput("comment", "Enter your comment/question:"),
-  #     footer = tagList(
-  #       modalButton("Cancel"),
-  #       actionButton("submit", "Submit", class = "btn-primary")
-  #     )
-  #   ))
-  # })
-  # 
+  observeEvent(input$showModal, {
+    showModal(modalDialog(
+      title = "Your Comment or Question",
+      textInput("comment", "Enter your comment/question:"),
+      footer = tagList(
+        modalButton("Cancel"),
+        actionButton("submit", "Submit", class = "btn-primary")
+      )
+    ))
+  })
+  
+  # Store plot selection
+  plot_choices <- c("Friend", "Wasserman", "Hansen", "Bruce", "Jones2", "Neder")
+  
+  observeEvent(input$confirm_download, {
+    showModal(modalDialog(
+      title = "Select Plots for PDF Export",
+      checkboxGroupInput(
+        inputId = "plots_modal",
+        label = "Choose VO2 equations to include:",
+        choices = plot_choices,
+        selected = plot_choices
+      ),
+      footer = tagList(
+        modalButton("Cancel"),
+        downloadButton("download_pdf_modal", "Download Selected Plots", class = "btn btn-success")
+      ),
+      easyClose = TRUE
+    ))
+  })
+  
+  output$download_pdf_modal <- downloadHandler(
+    filename = function() {
+      paste0("vo2_report_", Sys.Date(), ".html")
+    },
+    content = function(file) {
+      req(input$plots_modal)
+      req(filtered_results())  # Ensure reactive data is ready
+      
+      # Pull filtered data once
+      data <- filtered_results()
+      
+      # Build table for report
+      predicted_table <- data %>%
+        select(Subject_ID, Friend_pp, Wasserman_pp, Hansen_pp, Bruce_pp, Jones2_pp, Neder_pp) %>%
+        mutate(across(ends_with("_pp"), ~ round(.x, 1))) %>%
+        rename_with(~ gsub("_pp", "", .))
+      
+      # Long format for percent plot
+      data_long <- data %>%
+        select(Friend_pp, Wasserman_pp, Hansen_pp, Bruce_pp, Jones2_pp, Neder_pp) %>%
+        rename_with(~ gsub("_pp", "", .)) %>%
+        pivot_longer(cols = everything(), names_to = "Equation", values_to = "Percent")
+      
+      percent_plot <- ggplot(data_long, aes(x = Equation, y = Percent, fill = Percent)) +
+        geom_col() +
+        geom_text(aes(label = paste0(round(Percent), "%")), vjust = -0.5, fontface = "bold") +
+        scale_fill_gradient2(low = "red", mid = "yellow", high = "green", midpoint = 75) +
+        coord_flip() +
+        labs(
+          title = "Percent Predicted VO2 Max",
+          x = "",
+          y = "Percent Predicted"
+        ) +
+        theme_minimal() +
+        theme(
+          legend.position = "none",
+          axis.text = element_text(size = 12, face = "bold"),
+          plot.title = element_text(size = 14, face = "bold")
+        )
+      
+      # User input values to display in the report
+      user_inputs <- list(
+        Sex = input$sex,
+        Age = input$age,
+        Height = input$height,
+        Weight = input$weight,
+        Mode = input$test_mode
+      )
+      
+      # Render the report
+      rmarkdown::render(
+        input = "report_template.Rmd",
+        output_file = file,
+        output_format = "html_document",
+        params = list(
+          user_inputs = user_inputs,
+          predicted_table = predicted_table,
+          percent_plot = percent_plot,
+          plots_to_include = input$plots_modal,
+          weight_plot = weight_plot,
+          age_plot = age_plot,
+          height_plot = height_plot,
+          sex_plot = sex_plot
+        ),
+        envir = new.env(parent = globalenv())
+      )
+    }
+  )
+  observeEvent(input$show_disclaimer, {
+    showModal(modalDialog(
+      title = "Disclaimer",
+      HTML("<p>The equations and graphs are freely available for all users.</p>
+          <p>This calculator is not intended for treatment/diagnostic purposes, but rather as an additional tool to aid providers and researchers in interpreting CPETs.</p>"),
+      easyClose = TRUE,
+      footer = modalButton("I Understand")
+    ))
+  })
+  
   # 
   # # Load configuration
   # config <- config::get()
@@ -1726,8 +1699,55 @@ server <- function(input, output, session) {
   #   })
   # })
   # 
+  
+  # Show modal on click
+  observeEvent(input$open_report_modal, {
+    showModal(modalDialog(
+      title = "Select Plots to Include",
+      checkboxGroupInput("report_plots", "Choose Plots:", 
+                         choices = c("Friend", "Wasserman", "Hansen", "Bruce", "Jones", "Neder")),
+      downloadButton("download_custom_report", "Download Report"),
+      easyClose = TRUE
+    ))
+  })
+  
+  # Report download
+  output$download_custom_report <- downloadHandler(
+    filename = function() {
+      paste0("vo2_report_", Sys.Date(), ".html")
+    },
+    content = function(file) {
+      tempReport <- file.path(tempdir(), "report_template.Rmd")
+      file.copy("report_template.Rmd", tempReport, overwrite = TRUE)
+      
+      plot_list <- list()
+      if ("Friend" %in% input$report_plots) plot_list$Friend <- generateFriendPlot(input, plot_type = "static")
+      if ("Wasserman" %in% input$report_plots) plot_list$Wasserman <- generateWassermanplot(input, plot_type = "static")
+      if ("Hansen" %in% input$report_plots) plot_list$Hansen <- generateHansenplot(input, plot_type = "static")
+      if ("Bruce" %in% input$report_plots) plot_list$Bruce <- generateBruceplot(input, plot_type = "static")
+      if ("Jones" %in% input$report_plots) plot_list$Jones <- generateJonesplot(input, plot_type = "static")
+      if ("Neder" %in% input$report_plots) plot_list$Neder <- generateNederplot(input, plot_type = "static")
+      
+      params <- list(
+        input_vals = reactiveValuesToList(input),
+        comparison_plot = generateComparisonplot(results()),
+        selected_plots = plot_list
+      )
+      
+      rmarkdown::render(
+        tempReport,
+        output_file = file,
+        params = params,
+        envir = new.env(parent = globalenv())
+      )
+    }
+  )
 }
-
 shinyApp(ui = ui, server = server)
+
+
+
+
+
 
 

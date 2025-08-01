@@ -5275,3 +5275,156 @@ results_df.VarUnc %>%
   filter(p_value < 0.05) %>% 
   group_by(Term) %>% 
   summarise(count = n(), avg = mean(abs(Estimate)))
+
+
+
+######## Using ideal weight ########
+
+
+# setting up dataset
+AccessCPET_Ideal <- AccessCPET %>% 
+  mutate(
+    FRIEND_Predicted = case_when(
+      gender == 1 & Mode == "Bike" ~ (45.2 - (0.35 * age) - (10.9 * 1) - (0.15 * (weight_ideal * 2.20462)) + (0.68 * height_in) - (0.46 * 2)) * (weight_ideal),
+      gender == 2 & Mode == "Bike" ~ (45.2 - (0.35 * age) - (10.9 * 2) - (0.15 * weight_ideal * 2.20462) + (0.68 * height_in) - (0.46 * 2)) * (weight_ideal),
+      gender == 1 & Mode == "Treadmill" ~ (45.2 - (0.35 * age) - (10.9 * 1) - (0.15 * weight_ideal * 2.20462) + (0.68 * height_in) - (0.46 * 1)) * (weight_ideal),
+      gender == 2 & Mode == "Treadmill" ~ (45.2 - (0.35 * age) - (10.9 * 2) - (0.15 * weight_ideal * 2.20462) + (0.68 * height_in) - (0.46 * 1)) * (weight_ideal),
+      TRUE ~ NA_real_),
+    
+    Wasserman_Predicted = case_when(
+      gender == 1 & Mode == "Treadmill" ~ ((weight_ideal * (50.72 - (0.372 * age))) * 1.11), 
+      gender == 2 & Mode == "Treadmill" ~ (((weight_ideal + 42.8) * (22.78 - (0.17 * age))) * 1.11),
+      gender == 1 & Mode == "Bike" ~ (weight_ideal * (50.72 - (0.372 * age))), 
+      gender == 2 & Mode == "Bike" ~ ((weight_ideal + 42.8) * (22.78 - (0.17 * age))),
+      TRUE ~ NA_real_),
+    
+    Hansen_Predicted = case_when(
+      gender == 1 & Mode == "Bike"~ (weight_ideal * cycle_factor),
+      gender == 1 & Mode == "Treadmill" ~ (weight_ideal * cycle_factor) * 1.11,
+      
+      gender == 2 & Mode == "Bike" ~ ((weight_ideal + 43) * cycle_factor),
+      gender == 2 & Mode == "Treadmill"  ~ ((weight_ideal + 43) * cycle_factor) * 1.11,
+      TRUE ~ NA_real_),
+    
+    Bruce_Predicted = case_when(
+      gender == 1 & Mode == "Treadmill" ~ ((60 - (0.55* age)) * (weight_ideal)), 
+      gender == 2 & Mode == "Treadmill" ~ ((48 - (0.37 * age)) * (weight_ideal)),
+      gender == 1 & Mode == "Bike" ~ (((60 - (0.55* age)) * (weight_ideal)) * 0.89), 
+      gender == 2 & Mode == "Bike" ~ (((48 - (0.37 * age)) * (weight_ideal)) * 0.89),
+      TRUE ~ NA_real_),
+    
+    Jones_Predicted = case_when(
+      gender == 1 & Mode == "Bike" ~ (-3.76 + 0.034 * height_cm + 0.022 * weight_ideal - 0.028 * age) * 1000, 
+      gender == 2 & Mode == "Bike" ~ (-2.26 + 0.025 * height_cm + 0.01 * weight_ideal - 0.018 * age) * 1000,
+      gender == 1 & Mode == "Treadmill" ~ (((-3.76 + 0.034 * height_cm + 0.022 * weight_ideal - 0.028 * age) * 1000) * 1.11), 
+      gender == 2 & Mode == "Treadmill" ~ (((-2.26 + 0.025 * height_cm + 0.01 * weight_ideal - 0.018 * age) * 1000) * 1.11),
+      TRUE ~ NA_real_),
+    
+    Neder_Predicted = case_when(
+      gender == 1 & Mode == "Bike" ~ ((-24.3 * age) + (10.2 * weight_ideal) + (8.3 * height_cm) + 1125), 
+      gender == 2 & Mode == "Bike" ~ ((-13.7 * age) + (10.2 * weight_ideal) + (8.3 * height_cm) + 60),
+      gender == 1 & Mode == "Treadmill" ~ ((((-24.3 * age) + (10.2 * weight_ideal) + (8.3 * height_cm) + 1125)) * 1.11), 
+      gender == 2 & Mode == "Treadmill" ~ ((((-13.7 * age) + (10.2 * weight_ideal) + (8.3 * height_cm) + 60)) * 1.11),
+      TRUE ~ NA_real_)
+  )
+
+
+AccessCPET_Ideal <- AccessCPET_Ideal %>% 
+  mutate(
+    Friend_pp = (VO2_peak.actual/FRIEND_Predicted) * 100,
+    Wasserman_pp = (VO2_peak.actual/Wasserman_Predicted) * 100,
+    Hansen_pp = (VO2_peak.actual/Hansen_Predicted) * 100,
+    Bruce_pp = (VO2_peak.actual/Bruce_Predicted) * 100,
+    Jones2_pp = (VO2_peak.actual/Jones_Predicted) * 100,
+    Neder_pp = (VO2_peak.actual/Neder_Predicted) * 100
+  )
+
+
+
+Access_Percent_predicted_Ideal <- AccessCPET_Ideal %>%  
+  select(
+    Subject_ID,
+    Mode,
+    VO2_peak.actual,
+    FRIEND_Predicted,
+    Wasserman_Predicted,
+    Hansen_Predicted,
+    Bruce_Predicted,
+    Jones_Predicted,
+    Neder_Predicted,
+    Friend_pp,
+    Wasserman_pp,
+    Hansen_pp,
+    Bruce_pp,
+    Jones2_pp,
+    Neder_pp
+  ) %>%  
+  rename(
+    Measured_Predicted = VO2_peak.actual,
+    FRIEND_Percent.Predicted = Friend_pp,
+    Wasserman_Percent.Predicted = Wasserman_pp,
+    Hansen_Percent.Predicted = Hansen_pp,
+    Bruce_Percent.Predicted = Bruce_pp,
+    Jones_Percent.Predicted = Jones2_pp,
+    Neder_Percent.Predicted = Neder_pp
+  )
+
+AccessCPET_Ideal <-  AccessCPET_Ideal  %>% 
+  rename(
+    FRIEND_Percent.Predicted = Friend_pp,
+    Wasserman_Percent.Predicted = Wasserman_pp,
+    Hansen_Percent.Predicted = Hansen_pp,
+    Bruce_Percent.Predicted = Bruce_pp,
+    Jones_Percent.Predicted = Jones2_pp,
+    Neder_Percent.Predicted = Neder_pp
+  )
+
+
+Access_Percent_predicted_tidy_Ideal <- Access_Percent_predicted_Ideal %>%  
+  pivot_longer(
+    cols = -(c(Subject_ID, Mode)),
+    names_to = c("Equation", ".value"),
+    names_pattern = "(Measured|FRIEND|Wasserman|Hansen|Bruce|Jones|Neder)_(Predicted|Percent.Predicted)"
+  )
+
+Access_Percent_predicted_tidy_Ideal <- Access_Percent_predicted_tidy_Ideal %>%  
+  mutate(
+    Equation = as_factor(Equation)
+  )
+
+Access_Percent_predicted_tidy_Ideal <- Access_Percent_predicted_tidy_Ideal %>%  
+  mutate(
+    Clinical_Interpretation = case_when(
+      Percent.Predicted < 80 ~ 1, #low VO2
+      Percent.Predicted >= 80 ~ 0, #normal 
+      TRUE ~ NA_real_
+    ))
+
+
+
+Access_Percent_predicted_tidy_Ideal$Clinical_Interpretation <- factor(Access_Percent_predicted_tidy_Ideal$Clinical_Interpretation)
+Access_Percent_predicted_tidy_Ideal$Clinical_Interpretation <- factor(Access_Percent_predicted_tidy_Ideal$Clinical_Interpretation)
+
+Access_Interpertation_wide_Ideal <- Access_Percent_predicted_tidy_Ideal %>% 
+  pivot_wider(id_cols = Subject_ID, 
+              names_from = Equation, 
+              values_from = Clinical_Interpretation)
+
+
+Access_Interpertation_wide_Ideal <- Access_Interpertation_wide_Ideal %>% 
+  select(
+    -(Measured)
+  )
+
+
+# Plots
+
+Access_Percent_predicted_tidy_Ideal %>% 
+  filter(Equation != "Measured") %>% 
+  ggplot(aes(x = Percent.Predicted, color = Equation)) +
+  geom_density() +
+  labs(
+    title = "Ideal"
+  )
+
+
