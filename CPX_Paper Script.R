@@ -5,7 +5,7 @@
 
 #github change 
 
-# Packages  ---------------------------------------------------------------
+########## Packages  ----------------------------------------
 
 
 
@@ -61,7 +61,14 @@ library(broom.mixed)
 library(ggalluvial)
 library(NatParksPalettes)
 
-# Bringing in Data --------------------------------------------------------
+
+# setting up WD to make sure data is stored in the serveer
+
+setwd("R:/AirHazardsCenter/AHBPCE-PDCEN_site data/Tom-R/Predicted_VO2_Comparison")
+getwd()
+# Bringing in Data --------------------------------------------------
+
+load("Cpet_paper.RData") 
 
 #data is from both pre and post PDCEN
 # all data from CPET ODC file
@@ -4794,6 +4801,9 @@ results_df.BikeCorrected %>%
 
 #TREAD Corrected #####
 
+
+
+
 AI_Analysis_long.TreadCorrected$Pair <- factor(AI_Analysis_long.TreadCorrected$Pair)
 AI_Analysis_long.TreadCorrected$Race_Combined <- factor(AI_Analysis_long.TreadCorrected$Race_Combined)
 
@@ -5427,4 +5437,226 @@ Access_Percent_predicted_tidy_Ideal %>%
     title = "Ideal"
   )
 
+###### Making a plot for clinical example 
+
+
+generateComparisonplot <- function(results){
+  
+  # progress bar with Percent predicted    
+  
+  data <- results %>% 
+    select(
+      Friend_pp,
+      Wasserman_pp,
+      Hansen_pp,
+      Bruce_pp,
+      Jones2_pp,
+      Neder_pp
+    ) %>% 
+    rename(
+      FRIEND = Friend_pp,
+      Wasserman = Wasserman_pp,
+      Hansen = Hansen_pp,
+      Bruce = Bruce_pp,
+      Jones = Jones2_pp,
+      Neder = Neder_pp
+    )
+  
+  data_long <- data %>% 
+    pivot_longer(
+      cols = c("FRIEND", "Wasserman", "Hansen", "Bruce", "Jones", "Neder"),
+      names_to = "Equation",
+      values_to = "Percent"
+    )
+  
+  data_long$Percent <- round(data_long$Percent, digits = 0)
+  
+  
+  p <- data_long %>% 
+    ggplot() +
+    geom_col(aes(x = Equation, y = 100), fill = I("lightgrey"), alpha = 0.5) +
+    geom_col(aes(x = Equation, y = Percent, fill = Percent)) +
+    scale_fill_gradient2(low = "red", mid = "yellow", high = "green", midpoint = 75) +
+    geom_text(aes(x = Equation, y = Percent, label = paste0(Percent, "%")), vjust = -0.5, color = "black", fontface = "bold") +
+    labs(title = "Percent Predicted VO2 Max",
+         x = "Equation",
+         y = "Percent Predicted (%)") +
+    theme_minimal() +
+    theme(
+      legend.position = "none" ,
+      axis.title.x = element_blank(),
+      axis.title.y = element_blank(),
+      axis.text =  element_text(face = "bold", size = 12),
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      axis.ticks.y = element_blank()) +
+    coord_flip()  # Optional: Flips the axes for a horizontal bar plot
+  
+  
+  
+  return(p)
+  
+}
+
+# Setting up plots for case example ---------------------------------
+# making a bar plot
+
+
+generateComparisonplot <- function(results){
+  
+  # progress bar with Percent predicted    
+  
+  data <- results %>% 
+    select(
+      Friend_pp,
+      Wasserman_pp,
+      Hansen_pp,
+      Bruce_pp,
+      Jones2_pp,
+      Neder_pp
+    ) %>% 
+    rename(
+      FRIEND = Friend_pp,
+      Wasserman = Wasserman_pp,
+      Hansen = Hansen_pp,
+      Bruce = Bruce_pp,
+      Jones = Jones2_pp,
+      Neder = Neder_pp
+    )
+  
+  data_long <- data %>% 
+    pivot_longer(
+      cols = c("FRIEND", "Wasserman", "Hansen", "Bruce", "Jones", "Neder"),
+      names_to = "Equation",
+      values_to = "Percent"
+    )
+  
+  data_long$Percent <- round(data_long$Percent, digits = 0)
+  
+  
+  p <- data_long %>% 
+    ggplot() +
+    geom_col(aes(x = Equation, y = 100), fill = I("lightgrey"), alpha = 0.5) +
+    geom_col(aes(x = Equation, y = Percent, fill = Percent)) +
+    scale_fill_gradient2(low = "red", mid = "yellow", high = "green", midpoint = 75) +
+    geom_text(aes(x = Equation, y = Percent, label = paste0(Percent, "%")), vjust = -0.5, color = "black", fontface = "bold") +
+    labs(title = "Percent Predicted VO2 Max",
+         x = "Equation",
+         y = "Percent Predicted (%)") +
+    theme_minimal() +
+    theme(
+      legend.position = "none" ,
+      axis.title.x = element_blank(),
+      axis.title.y = element_blank(),
+      axis.text =  element_text(face = "bold", size = 12),
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      axis.ticks.y = element_blank()) +
+    coord_flip()  # Optional: Flips the axes for a horizontal bar plot
+  
+  
+  
+  return(p)
+  
+}
+
+AccessCPET_Corrected %>% 
+  mutate(Subject_ID = as.character(Subject_ID)) %>% 
+  select(
+    Subject_ID,
+    Friend_pp = FRIEND_Percent.Predicted,
+    Wasserman_pp = Wasserman_Percent.Predicted,
+    Hansen_pp = Hansen_Percent.Predicted,
+    Bruce_pp = Bruce_Percent.Predicted,
+    Jones2_pp = Jones_Percent.Predicted,
+    Neder_pp = Neder_Percent.Predicted
+  ) %>% 
+  filter(
+    Subject_ID == "37389"
+  ) %>%
+  generateComparisonplot()
+
+
+
+#combinging the 2 images
+
+library(magick)
+
+
+Access_Percent_predicted_tidy_Uncorrected$Equation <- factor(Access_Percent_predicted_tidy_Uncorrected$Equation,
+                                                             levels =  c("Measured","Wasserman", "FRIEND","Hansen","Bruce","Jones", "Neder")) 
+
+df <- as.data.frame(list(
+  Equation = c("Wasserman", "FRIEND","Hansen","Bruce","Jones", "Neder"),
+  Percent = c(68, 114, 105, 71, 85, 109))) 
+
+
+#making an image for the paper
+
+imgA <- df |>
+  ggplot() +
+  geom_col(aes(x = Equation, y = 100), fill = I("lightgrey"), alpha = 0.5) +
+  geom_col(aes(x = Equation, y = Percent, fill = Equation)) +
+  scale_fill_manual(
+    values = c(
+      "Wasserman" = "#1874CD",
+      "FRIEND" = "#458B00",
+      "Neder" = "grey",
+      "Jones" = "grey",
+      "Hansen" = "grey",
+      "Bruce" = "grey"
+    )) +
+  geom_text(aes(x = Equation, y = Percent, label = paste0(Percent, "%")),
+            vjust = 0.5, # Center text
+            hjust = -0.05, # Place % outside bar
+            color = "black",
+            fontface = "bold",
+            size = 4) + # Make text larger if needed
+  labs(title = "Percent Predicted VO2 Max",
+       x = "Equation",
+       y = "Percent Predicted (%)") +
+  theme_minimal() +
+  theme(
+    legend.position = "none",
+    axis.title.x = element_blank(),
+    axis.title.y = element_blank(),
+    axis.text = element_text(face = "bold", size = 12),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.ticks.y = element_blank(),
+    plot.margin = margin(30, 40, 30, 25) # Increase margins
+  ) +
+  coord_flip(clip = "off") # Prevent cutting off labels
+
+
+# --- 1. Prepare and read images ---
+# (Assumes 'imgA' is a ggplot object already defined)
+imgA_path <- "imgA_plot.png"
+ggsave(imgA_path, imgA, width = 7, height = 4, dpi = 300)
+imgA_magick <- image_read(imgA_path)
+
+imgB_raw <- image_read("Fig5.tif") %>%
+  image_scale("x800")
+imgB_magick <- imgB_raw
+
+# Convert magick images to grob objects that cowplot can handle
+grobA <- grid::rasterGrob(imgA_magick)
+grobB <- grid::rasterGrob(imgB_magick)
+
+# --- 2. Create the combined plot with annotations ---
+# You can use cowplot's draw_plot to add images and text
+# The plot_grid function is ideal for arranging them
+# Here, we'll manually set the aspect ratio and size
+plot_combo <- plot_grid(
+  grobA,
+  grobB,
+  labels = c("A)", "B)"),
+  ncol = 1,
+  align = "v", # Align vertically
+  rel_heights = c(1.0, 1.055) # This is the key part: set relative heights to be equal
+)
+
+# --- 3. Save the final figure ---
+# The ggsave function from ggplot2 works well with cowplot output
+ggsave("Figure5.tiff", plot = plot_combo, width = 7, height = 8, dpi = 600, units = "in")
 

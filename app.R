@@ -1,3 +1,5 @@
+
+
 # Load necessary packages
 library(shiny)
 library(shinydashboard)
@@ -15,11 +17,278 @@ library(rmarkdown)
 
 
 
-# Configure RStudio Connect account
-rsconnect::setAccountInfo(
-  name = 'qcmuek-thomas-alexander',
-  token = '0C459DADC38DE42C7AE2B7A40C558D21',
-  secret = '0N2+uwnG1hKyr8eFEchrcpPg0Cg/bUf0ZOpI6mlS'
+
+# Add this custom CSS in the beginning of the script
+
+# Insert va_custom_css,  right after dashboardBody( and before tabItems(
+
+# Add this custom CSS to your UI section
+# Insert right after dashboardBody( and before tabItems(
+
+va_custom_css <- tags$head(
+  tags$style(HTML("
+    /* VA.gov Color Palette */
+    :root {
+      --va-primary-blue: #003E73;
+      --va-dark-blue: #112e51;
+      --va-link-blue: #004795;
+      --va-text-dark: #212121;
+      --va-text-gray: #5B616B;
+      --va-bg-light: #F1F1F1;
+    }
+    
+    /* Import VA font */
+    @import url('https://fonts.googleapis.com/css2?family=Source+Sans+Pro:wght@400;600;700&display=swap');
+    
+    /* Global font */
+    body, .main-header, .sidebar, .content-wrapper, .box {
+      font-family: 'Source Sans Pro', sans-serif !important;
+    }
+    
+    /* Header styling */
+    .skin-black .main-header .navbar {
+      background-color: var(--va-primary-blue) !important;
+    }
+    
+    .skin-black .main-header .logo {
+      background-color: var(--va-primary-blue) !important;
+      color: white !important;
+      font-weight: 600 !important;
+      border-right: 1px solid rgba(255,255,255,0.1);
+    }
+    
+    .skin-black .main-header .logo:hover {
+      background-color: var(--va-dark-blue) !important;
+    }
+    
+    /* Sidebar styling */
+    .skin-black .main-sidebar {
+      background-color: #1C2A47 !important;
+    }
+    
+    .skin-black .sidebar-menu > li.active > a,
+    .skin-black .sidebar-menu > li:hover > a {
+      background-color: var(--va-primary-blue) !important;
+      border-left: 4px solid white;
+    }
+    
+    .skin-black .sidebar-menu > li > a {
+      color: white !important;
+      font-weight: 400;
+    }
+    
+    /* Content area */
+    .content-wrapper {
+      background-color: var(--va-bg-light) !important;
+    }
+    
+    /* Box styling */
+    .box.box-solid.box-primary > .box-header {
+      background-color: var(--va-primary-blue) !important;
+      color: white !important;
+    }
+    
+    .box.box-solid.box-primary > .box-header > .box-title {
+      color: white !important;
+    }
+    
+    .box.box-solid.box-primary {
+      border: 1px solid var(--va-primary-blue) !important;
+    }
+    
+    .box.box-solid.box-danger > .box-header {
+      background-color: var(--va-dark-blue) !important;
+      color: white !important;
+    }
+    
+    .box.box-solid.box-danger > .box-header > .box-title {
+      color: white !important;
+    }
+    
+    .box.box-solid.box-danger {
+      border: 1px solid var(--va-dark-blue) !important;
+    }
+    
+    /* Button styling */
+    .btn-primary {
+      background-color: var(--va-primary-blue) !important;
+      border-color: var(--va-primary-blue) !important;
+      color: white !important;
+      font-weight: 600;
+    }
+    
+    .btn-primary:hover {
+      background-color: var(--va-dark-blue) !important;
+      border-color: var(--va-dark-blue) !important;
+    }
+    
+    .btn-success {
+      background-color: #00A91C !important;
+      border-color: #00A91C !important;
+    }
+    
+    /* Action button in sidebar */
+    #open_report_modal {
+      background-color: white !important;
+      color: var(--va-primary-blue) !important;
+      border: 2px solid white !important;
+      width: 90%;
+      margin: 0 auto;
+      display: block;
+      font-weight: 600;
+    }
+    
+    #open_report_modal:hover {
+      background-color: var(--va-bg-light) !important;
+      color: var(--va-dark-blue) !important;
+    }
+    
+    /* Tables */
+    table {
+      font-family: 'Source Sans Pro', sans-serif !important;
+    }
+    
+    table thead {
+      background-color: var(--va-primary-blue) !important;
+      color: white !important;
+    }
+    
+    /* Tab styling */
+    .nav-tabs > li.active > a,
+    .nav-tabs > li.active > a:hover,
+    .nav-tabs > li.active > a:focus {
+      background-color: #004795 !important;  /* Lighter blue for active tab */
+      color: white !important;
+      border-color: #0071BC !important;
+      font-weight: 700 !important;  /* Make active tab bold */
+    }
+    
+    /* Force white text on active tabs */
+    .nav-tabs > li.active > a {
+      color: white !important;
+    }
+    
+    /* All tabs have white text on blue background */
+    .nav-tabs > li > a {
+      background-color: var(--va-primary-blue) !important;  /* Darker blue for inactive */
+      color: white !important;
+      font-weight: 600;
+      border-color: var(--va-primary-blue) !important;
+      margin-right: 4px !important;
+      border-radius: 4px 4px 0 0 !important;
+    }
+    
+    .nav-tabs > li {
+      margin-right: 2px !important;
+    }
+    
+    .nav-tabs {
+      border-bottom: 2px solid var(--va-primary-blue) !important;
+      margin-top: 20px !important;
+    }
+    
+    /* Add space between slider and tabs */
+    .box-body > .form-group {
+      margin-bottom: 25px !important;
+    }
+    
+    /* Specific spacing for slider input */
+    .shiny-input-container:has(.irs) {
+      margin-bottom: 30px !important;
+    }
+    
+    .nav-tabs > li > a:hover {
+      background-color: #112e51 !important;  /* Even darker on hover */
+      border-color: #112e51 !important;
+      color: white !important;
+    }
+    
+    /* Inputs */
+    .form-control {
+      border-color: #ccc !important;
+      font-family: 'Source Sans Pro', sans-serif !important;
+    }
+    
+    .form-control:focus {
+      border-color: var(--va-link-blue) !important;
+      box-shadow: 0 0 0 0.2rem rgba(0, 71, 149, 0.25) !important;
+    }
+    
+    /* Select inputs */
+    .selectize-input {
+      border-color: #ccc !important;
+    }
+    
+    .selectize-input.focus {
+      border-color: var(--va-link-blue) !important;
+    }
+    
+    /* Slider */
+    .irs-bar {
+      background-color: var(--va-primary-blue) !important;
+    }
+    
+    .irs-from, .irs-to, .irs-single {
+      background-color: var(--va-primary-blue) !important;
+    }
+    
+    /* Modal styling */
+    .modal-header {
+      background-color: var(--va-primary-blue) !important;
+      color: white !important;
+    }
+    
+    .modal-title {
+      color: white !important;
+      font-weight: 600;
+    }
+    
+    /* Footer logo */
+    .footer-logo {
+      position: absolute;
+      bottom: 20px;
+      width: 100%;
+      text-align: center;
+    }
+    
+    /* Headings */
+    h2, h3, h4 {
+      color: var(--va-text-dark) !important;
+      font-weight: 600 !important;
+    }
+    
+    /* Box content text - make sure it's dark and readable */
+    .box-body {
+      color: var(--va-text-dark) !important;
+    }
+    
+    /* All paragraph text in content area */
+    .content-wrapper p,
+    .content-wrapper label,
+    .content-wrapper .form-group label {
+      color: var(--va-text-dark) !important;
+    }
+    
+    /* Table body text */
+    table tbody {
+      color: var(--va-text-dark) !important;
+    }
+    
+    /* Tab content text */
+    .tab-content {
+      color: var(--va-text-dark) !important;
+    }
+    
+    /* Links */
+    a {
+      color: var(--va-link-blue) !important;
+    }
+    
+    a:hover {
+      color: var(--va-dark-blue) !important;
+      text-decoration: underline !important;
+    }
+  "))
 )
 
 
@@ -32,7 +301,7 @@ rsconnect::setAccountInfo(
 generateComparisonplot <- function(results){
   
   # progress bar with Percent predicted    
-  
+
   data <- results %>% 
     select(
       Friend_pp,
@@ -81,150 +350,150 @@ generateComparisonplot <- function(results){
       axis.ticks.y = element_blank()) +
     coord_flip()  # Optional: Flips the axes for a horizontal bar plot
   
-  
+
   
   return(p)
   
 }
 generateFriendPlot <- function(input, plot_type = c("interactive", "static")) {
   
-  data <- data.frame(
-    weight_assumed_kg = seq(from = 50, to = 150, by = 1),
-    gender = input$gender,
-    Mode = input$mode,
-    weight_kg = input$weight,
-    height_cm = input$height,
-    age = input$age,
-    age_Plus5= input$age + 5,
-    age_Plus10= input$age + 10,
-    age_Plus15= input$age + 15,
-    age_Minus5= input$age - 5,
-    age_Minus10= input$age - 10,
-    age_Minus15= input$age - 15,
-    measured_VO2 = input$measuredVO2
+data <- data.frame(
+  weight_assumed_kg = seq(from = 50, to = 150, by = 1),
+  gender = input$gender,
+  Mode = input$mode,
+  weight_kg = input$weight,
+  height_cm = input$height,
+  age = input$age,
+  age_Plus5= input$age + 5,
+  age_Plus10= input$age + 10,
+  age_Plus15= input$age + 15,
+  age_Minus5= input$age - 5,
+  age_Minus10= input$age - 10,
+  age_Minus15= input$age - 15,
+  measured_VO2 = input$measuredVO2
+)
+
+data <- data %>%
+  mutate(
+    slider_weight = input$SliderBMI * ((height_cm/100) * (height_cm/100)))
+
+# Convert weight and height to lbs and inches for FRIEND equation
+data <- data %>%
+  mutate(
+    weight_lbs = weight_kg * 2.20462,
+    height_in = height_cm / 2.54,
+    weight_ideal = case_when(
+      gender == "Male" ~ 0.79 * height_cm - 60.7,
+      gender == "Female" ~ 0.65 * height_cm - 42.8,
+      TRUE ~ NA_real_
+    ),
+    cycle_factor = case_when(
+      gender == "Male" ~ 50.72 - 0.372 * age,
+      gender == "Female" ~ 22.78 - 0.17 * age,
+      TRUE ~ NA_real_
+    )
   )
-  
-  data <- data %>%
-    mutate(
-      slider_weight = input$SliderBMI * ((height_cm/100) * (height_cm/100)))
-  
-  # Convert weight and height to lbs and inches for FRIEND equation
-  data <- data %>%
-    mutate(
-      weight_lbs = weight_kg * 2.20462,
-      height_in = height_cm / 2.54,
-      weight_ideal = case_when(
-        gender == "Male" ~ 0.79 * height_cm - 60.7,
-        gender == "Female" ~ 0.65 * height_cm - 42.8,
-        TRUE ~ NA_real_
-      ),
-      cycle_factor = case_when(
-        gender == "Male" ~ 50.72 - 0.372 * age,
-        gender == "Female" ~ 22.78 - 0.17 * age,
-        TRUE ~ NA_real_
-      )
-    )
-  
-  
-  data <- data %>% 
-    pivot_longer(
-      cols = c(age, age_Plus5, age_Plus10, age_Plus15, age_Minus5, age_Minus10,age_Minus15),
-      names_to = "Age_Group",
-      values_to = "age"
-    )
-  
-  
-  data <- data %>%
-    mutate(
-      VO2_peak_assumed = case_when(
-        gender == "Male" & Mode == "Bike" ~ (45.2 - (0.35 * age) - (10.9 * 1) - (0.15 * (weight_assumed_kg * 2.20462) ) + (0.68 * height_in) - (0.46 * 2)) * weight_assumed_kg,
-        gender == "Female" & Mode == "Bike" ~ (45.2 - (0.35 * age) - (10.9 * 2) - (0.15 * (weight_assumed_kg * 2.20462)) + (0.68 * height_in) - (0.46 * 2)) * weight_assumed_kg,
-        gender == "Male" & Mode == "Treadmill" ~ (45.2 - (0.35 * age) - (10.9 * 1) - (0.15 * (weight_assumed_kg * 2.20462)) + (0.68 * height_in) - (0.46 * 1)) * weight_assumed_kg,
-        gender == "Female" & Mode == "Treadmill" ~ (45.2 - (0.35 * age) - (10.9 * 2) - (0.15 * (weight_assumed_kg * 2.20462)) + (0.68 * height_in) - (0.46 * 1)) * weight_assumed_kg,
-        TRUE ~ NA_real_),
-      
-      
-      VO2_peak_ideal = case_when(
-        gender == "Male" & Mode == "Bike" ~ (45.2 - (0.35 * age) - (10.9 * 1) - (0.15 * (2.20462  * weight_ideal)) + (0.68 * height_in) - (0.46 * 2)) * weight_ideal,
-        gender == "Female" & Mode == "Bike" ~ (45.2 - (0.35 * age) - (10.9 * 2) - (0.15 * (2.20462  * weight_ideal)) + (0.68 * height_in) - (0.46 * 2)) * weight_ideal,
-        gender == "Male" & Mode == "Treadmill" ~ (45.2 - (0.35 * age) - (10.9 * 1) - (0.15 * (2.20462  * weight_ideal)) + (0.68 * height_in) - (0.46 * 1)) * weight_ideal,
-        gender == "Female" & Mode == "Treadmill" ~ (45.2 - (0.35 * age) - (10.9 * 2) - (0.15 * (2.20462  * weight_ideal)) + (0.68 * height_in) - (0.46 * 1)) * weight_ideal,
-        TRUE ~ NA_real_),
-      
-      VO2_peak_actual = case_when(
-        gender == "Male" & Mode == "Bike" ~ (45.2 - (0.35 * age) - (10.9 * 1) - (0.15 * weight_lbs) + (0.68 * height_in) - (0.46 * 2)) * weight_kg,
-        gender == "Female" & Mode == "Bike" ~ (45.2 - (0.35 * age) - (10.9 * 2) - (0.15 * weight_lbs) + (0.68 * height_in) - (0.46 * 2)) * weight_kg,
-        gender == "Male" & Mode == "Treadmill" ~ (45.2 - (0.35 * age) - (10.9 * 1) - (0.15 * weight_lbs) + (0.68 * height_in) - (0.46 * 1)) * weight_kg,
-        gender == "Female" & Mode == "Treadmill" ~ (45.2 - (0.35 * age) - (10.9 * 2) - (0.15 * weight_lbs) + (0.68 * height_in) - (0.46 * 1)) * weight_kg,
-        TRUE ~ NA_real_)
-      
-    )
-  
-  
-  data <- data %>% 
-    mutate(Age_Group = case_when(
-      Age_Group == "age" ~ "Current Age",
-      Age_Group == "age_Plus5" ~ "Age + 5",
-      Age_Group == "age_Plus10" ~ "Age + 10",
-      Age_Group == "age_Plus15" ~ "Age + 15",
-      Age_Group == "age_Minus5"~ "Age - 5",
-      Age_Group == "age_Minus10" ~ "Age - 10",
-      Age_Group == "age_Minus15" ~ "Age - 15"))
-  
-  data$Age_Group <- factor(data$Age_Group, levels = (c("Current Age", "Age + 5", "Age + 10", "Age + 15", "Age - 5", "Age - 10", "Age - 15" )))
-  
-  
-  # Convert to Plotly and specify tooltip information
-  
-  FRIEND_Plot <- ggplot(data) +
-    geom_line(data = filter(data, Age_Group == "Current Age"), aes(x = weight_assumed_kg, y = VO2_peak_assumed, color = Age_Group), linewidth = 1.2) +
+
+
+data <- data %>% 
+  pivot_longer(
+    cols = c(age, age_Plus5, age_Plus10, age_Plus15, age_Minus5, age_Minus10,age_Minus15),
+    names_to = "Age_Group",
+    values_to = "age"
+  )
+
+
+data <- data %>%
+  mutate(
+    VO2_peak_assumed = case_when(
+      gender == "Male" & Mode == "Bike" ~ (45.2 - (0.35 * age) - (10.9 * 1) - (0.15 * (weight_assumed_kg * 2.20462) ) + (0.68 * height_in) - (0.46 * 2)) * weight_assumed_kg,
+      gender == "Female" & Mode == "Bike" ~ (45.2 - (0.35 * age) - (10.9 * 2) - (0.15 * (weight_assumed_kg * 2.20462)) + (0.68 * height_in) - (0.46 * 2)) * weight_assumed_kg,
+      gender == "Male" & Mode == "Treadmill" ~ (45.2 - (0.35 * age) - (10.9 * 1) - (0.15 * (weight_assumed_kg * 2.20462)) + (0.68 * height_in) - (0.46 * 1)) * weight_assumed_kg,
+      gender == "Female" & Mode == "Treadmill" ~ (45.2 - (0.35 * age) - (10.9 * 2) - (0.15 * (weight_assumed_kg * 2.20462)) + (0.68 * height_in) - (0.46 * 1)) * weight_assumed_kg,
+      TRUE ~ NA_real_),
     
-    geom_point(data = filter(data, Age_Group == "Current Age"),
-               aes(x = weight_ideal, y = VO2_peak_ideal,
-                   text = paste("Ideal Weight:", sprintf("%.2f", weight_ideal), "kg<br>VO2 Peak Predicted:",
-                                sprintf("%.2f", VO2_peak_ideal), "mL/min<br>Percent Predicted:",
-                                sprintf("%.2f%%", (measured_VO2 / VO2_peak_ideal * 100)))), color = "red", size = 5) +
-    geom_point(data = filter(data, Age_Group == "Current Age"),
-               aes(x = weight_kg, y = VO2_peak_actual,
-                   text = paste("Measured Weight:", sprintf("%.2f", weight_kg), "kg<br>VO2 Peak Predicted:",
-                                sprintf("%.2f", VO2_peak_actual), "mL/min<br>Percent Predicted:",
-                                sprintf("%.2f%%", (measured_VO2 / VO2_peak_actual * 100)))), color = "blue", size = 5) +
     
-    geom_line(data = filter(data, Age_Group != "Current Age"), aes(x = weight_assumed_kg, y = VO2_peak_assumed, color = Age_Group), linetype = "dashed") +
+    VO2_peak_ideal = case_when(
+      gender == "Male" & Mode == "Bike" ~ (45.2 - (0.35 * age) - (10.9 * 1) - (0.15 * (2.20462  * weight_ideal)) + (0.68 * height_in) - (0.46 * 2)) * weight_ideal,
+      gender == "Female" & Mode == "Bike" ~ (45.2 - (0.35 * age) - (10.9 * 2) - (0.15 * (2.20462  * weight_ideal)) + (0.68 * height_in) - (0.46 * 2)) * weight_ideal,
+      gender == "Male" & Mode == "Treadmill" ~ (45.2 - (0.35 * age) - (10.9 * 1) - (0.15 * (2.20462  * weight_ideal)) + (0.68 * height_in) - (0.46 * 1)) * weight_ideal,
+      gender == "Female" & Mode == "Treadmill" ~ (45.2 - (0.35 * age) - (10.9 * 2) - (0.15 * (2.20462  * weight_ideal)) + (0.68 * height_in) - (0.46 * 1)) * weight_ideal,
+      TRUE ~ NA_real_),
     
-    labs(y = "VO2 Peak Predicted mL/min", x = "Weight (kg)", color = "Age Groups") +
-    geom_vline(xintercept = data$slider_weight, linetype = "dashed", color = "black") +
-    scale_y_continuous(
-      limits = c(1000, 6000),
-      breaks = seq(1000, 6000, by = 1000),  # Major breaks
-      minor_breaks = seq(1500, 5500, by = 1000)
-    ) +
-    theme_grey() +
-    scale_color_manual(values = c(
-      "Current Age" = "black", 
-      "Age + 5"     = "#7AA6DCFF",
-      "Age + 10"    = "#EFC000FF",
-      "Age + 15"    = "#868686FF",
-      "Age - 5"     = "#CD534CFF",
-      "Age - 10"    = "#8F7700FF",
-      "Age - 15"    = "#003C67FF")) +
-    theme(
-      axis.text = element_text(face = "bold", size = 12),
-      axis.title = element_text(face = "bold", size = 14),
-      plot.caption = element_text(size = 12),
-      panel.grid.minor = element_line(size = 0.5, linetype = 'solid', colour = "gray50"),
-      legend.position= "bottom"
-    )
+    VO2_peak_actual = case_when(
+      gender == "Male" & Mode == "Bike" ~ (45.2 - (0.35 * age) - (10.9 * 1) - (0.15 * weight_lbs) + (0.68 * height_in) - (0.46 * 2)) * weight_kg,
+      gender == "Female" & Mode == "Bike" ~ (45.2 - (0.35 * age) - (10.9 * 2) - (0.15 * weight_lbs) + (0.68 * height_in) - (0.46 * 2)) * weight_kg,
+      gender == "Male" & Mode == "Treadmill" ~ (45.2 - (0.35 * age) - (10.9 * 1) - (0.15 * weight_lbs) + (0.68 * height_in) - (0.46 * 1)) * weight_kg,
+      gender == "Female" & Mode == "Treadmill" ~ (45.2 - (0.35 * age) - (10.9 * 2) - (0.15 * weight_lbs) + (0.68 * height_in) - (0.46 * 1)) * weight_kg,
+      TRUE ~ NA_real_)
+    
+  )
+
+
+data <- data %>% 
+  mutate(Age_Group = case_when(
+    Age_Group == "age" ~ "Current Age",
+    Age_Group == "age_Plus5" ~ "Age + 5",
+    Age_Group == "age_Plus10" ~ "Age + 10",
+    Age_Group == "age_Plus15" ~ "Age + 15",
+    Age_Group == "age_Minus5"~ "Age - 5",
+    Age_Group == "age_Minus10" ~ "Age - 10",
+    Age_Group == "age_Minus15" ~ "Age - 15"))
+
+data$Age_Group <- factor(data$Age_Group, levels = (c("Current Age", "Age + 5", "Age + 10", "Age + 15", "Age - 5", "Age - 10", "Age - 15" )))
+
+
+# Convert to Plotly and specify tooltip information
+
+FRIEND_Plot <- ggplot(data) +
+  geom_line(data = filter(data, Age_Group == "Current Age"), aes(x = weight_assumed_kg, y = VO2_peak_assumed, color = Age_Group), linewidth = 1.2) +
   
+  geom_point(data = filter(data, Age_Group == "Current Age"),
+             aes(x = weight_ideal, y = VO2_peak_ideal,
+                 text = paste("Ideal Weight:", sprintf("%.2f", weight_ideal), "kg<br>VO2 Peak Predicted:",
+                              sprintf("%.2f", VO2_peak_ideal), "mL/min<br>Percent Predicted:",
+                              sprintf("%.2f%%", (measured_VO2 / VO2_peak_ideal * 100)))), color = "red", size = 5) +
+  geom_point(data = filter(data, Age_Group == "Current Age"),
+             aes(x = weight_kg, y = VO2_peak_actual,
+                 text = paste("Measured Weight:", sprintf("%.2f", weight_kg), "kg<br>VO2 Peak Predicted:",
+                              sprintf("%.2f", VO2_peak_actual), "mL/min<br>Percent Predicted:",
+                              sprintf("%.2f%%", (measured_VO2 / VO2_peak_actual * 100)))), color = "blue", size = 5) +
   
+  geom_line(data = filter(data, Age_Group != "Current Age"), aes(x = weight_assumed_kg, y = VO2_peak_assumed, color = Age_Group), linetype = "dashed") +
   
-  
-  if (plot_type == "interactive") {
-    return(plotly::ggplotly(FRIEND_Plot, tooltip = "text", dynamicTicks= TRUE))
-  } else {
-    return(FRIEND_Plot)
-  }
-  
+  labs(y = "VO2 Peak Predicted mL/min", x = "Weight (kg)", color = "Age Groups") +
+  geom_vline(xintercept = data$slider_weight, linetype = "dashed", color = "black") +
+  scale_y_continuous(
+    limits = c(1000, 6000),
+    breaks = seq(1000, 6000, by = 1000),  # Major breaks
+    minor_breaks = seq(1500, 5500, by = 1000)
+  ) +
+  theme_grey() +
+  scale_color_manual(values = c(
+    "Current Age" = "black", 
+    "Age + 5"     = "#7AA6DCFF",
+    "Age + 10"    = "#EFC000FF",
+    "Age + 15"    = "#868686FF",
+    "Age - 5"     = "#CD534CFF",
+    "Age - 10"    = "#8F7700FF",
+    "Age - 15"    = "#003C67FF")) +
+  theme(
+    axis.text = element_text(face = "bold", size = 12),
+    axis.title = element_text(face = "bold", size = 14),
+    plot.caption = element_text(size = 12),
+    panel.grid.minor = element_line(size = 0.5, linetype = 'solid', colour = "gray50"),
+    legend.position= "bottom"
+  )
+
+
+
+
+if (plot_type == "interactive") {
+  return(plotly::ggplotly(FRIEND_Plot, tooltip = "text", dynamicTicks= TRUE))
+} else {
+  return(FRIEND_Plot)
+}
+
 }
 generateWassermanplot <- function(input , plot_type = c("interactive", "static")){
   
@@ -763,7 +1032,7 @@ generateJonesplot <- function(input, plot_type = c("interactive", "static")){
       Age_Group == "age_Minus15" ~ "Age - 15"))
   
   data$Age_Group <- factor(data$Age_Group, levels = (c("Current Age", "Age + 5", "Age + 10", "Age + 15", "Age - 5", "Age - 10", "Age - 15" )))
-  
+
   
   
   Jones2_Plot <- ggplot(data) +
@@ -808,7 +1077,7 @@ generateJonesplot <- function(input, plot_type = c("interactive", "static")){
   
   
   # Convert to Plotly and specify tooltip information
-  
+
   if (plot_type == "interactive") {
     return(plotly::ggplotly(Jones2_Plot, tooltip = "text", dynamicTicks= TRUE))
   } else {
@@ -948,7 +1217,7 @@ generateNederplot <- function(input, plot_type = c("interactive", "static")){
   
   
   # Convert to Plotly and specify tooltip information
-  
+
   if (plot_type == "interactive") {
     return(plotly::ggplotly(Neder_Plot, tooltip = "text", dynamicTicks= TRUE))
   } else {
@@ -973,7 +1242,7 @@ ui <- dashboardPage(
       
       #Add the download button below the menu
       br(), br(),
-      
+
       div(
         style = "text-align: center; margin-top: 20px;",
         actionButton("open_report_modal", "Download Report", icon = icon("file-download"))
@@ -988,6 +1257,7 @@ ui <- dashboardPage(
     )),
   
   dashboardBody(
+     va_custom_css,  # <-- ADD THIS LINE HERE
     tags$script(HTML("
     $(document).on('shiny:connected', function() {
       Shiny.setInputValue('show_disclaimer', true, {priority: 'event'});
@@ -997,7 +1267,7 @@ ui <- dashboardPage(
     tabItems(
       tabItem(tabName = "dashboard",
               fluidRow(
-                box(title = "Input Parameters", status = "primary", solidHeader = TRUE, width = 4, height = 565,
+                box(title = "Input Parameters", status = "primary", solidHeader = TRUE, width = 4, height = 600,
                     selectInput("gender", "Sex", c("Male", "Female")),
                     selectInput("mode", "Mode", c("Treadmill", "Bike")),
                     numericInput("weight", "Weight (kg)", value = 110),
@@ -1006,7 +1276,7 @@ ui <- dashboardPage(
                     numericInput("measuredVO2", "Measured VO2 (mL/min)", value = 3000),
                     actionButton("calculate", "Calculate")
                 ),
-                box(title = "Predicted VO2 Max", status = "primary", solidHeader = TRUE, width = 8,
+                box(title = "Predicted VO2 Max", status = "primary", solidHeader = TRUE, height = 600, width = 8,
                     tableOutput("resultsTable"),
                     plotOutput("comparisonPlot")
                 )
@@ -1015,16 +1285,30 @@ ui <- dashboardPage(
               fluidRow(
                 box(title = "Weight vs VO2 Graphs", status = "danger", solidHeader = TRUE, width = 12,
                     sliderInput("SliderBMI", "Select BMI", value = 25, min = 20, max = 40),
+                    div(style = "margin-bottom: 20px;"),  # Custom spacing
                     tabsetPanel(
                       id = 'plots',
-                      tabPanel("Friend vs Weight", tableOutput("resultsTableFRIEND"), plotlyOutput("friendPlot")),
-                      tabPanel("Wasserman vs Weight", tableOutput("resultsTableWasserman"), plotlyOutput("wassermanPlot")),
-                      tabPanel("Hansen vs Weight", tableOutput("resultsTableHansen"), plotlyOutput("hansenPlot")),
-                      tabPanel("Bruce vs Weight", tableOutput("resultsTableBruce"), plotlyOutput("BrucePlot")),
-                      tabPanel("Jones vs Weight", tableOutput("resultsTableJones2"), plotlyOutput("jones2Plot")),
-                      tabPanel("Neder vs Weight", tableOutput("resultsTableNeder"), plotlyOutput("NederPlot")),
+                      tabPanel("Friend vs Weight", div(style = "margin-top: 15px;", 
+                              tableOutput("resultsTableFRIEND")), plotlyOutput("friendPlot")),
+
+                      tabPanel("Wasserman vs Weight", div(style = "margin-top: 15px;",
+                              tableOutput("resultsTableWasserman")), plotlyOutput("wassermanPlot")),
+                      
+                      tabPanel("Hansen vs Weight", div(style = "margin-top: 15px;",
+                              tableOutput("resultsTableHansen")), plotlyOutput("hansenPlot")),
+
+                      tabPanel("Bruce vs Weight", div(style = "margin-top: 15px;",
+                              tableOutput("resultsTableBruce")), plotlyOutput("BrucePlot")),
+
+                      tabPanel("Jones vs Weight", div(style = "margin-top: 15px;",
+                              tableOutput("resultsTableJones2")), plotlyOutput("jones2Plot")),
+
+                      tabPanel("Neder vs Weight", div(style = "margin-top: 15px;",
+                              tableOutput("resultsTableNeder")), plotlyOutput("NederPlot")),
+
                       tabPanel("Equations", tags$img(src = "equations4.png", height = "800px", width = "auto"))
-                    ))
+                    )
+                  )
               )),
       tabItem(tabName = "help",
               h2("Welcome"),
@@ -1041,10 +1325,10 @@ ui <- dashboardPage(
 
 
 
+  
+  server <- function(input, output, session) {
+    
 
-server <- function(input, output, session) {
-  
-  
   
   # Reactive values to store the computed dataset
   results <- reactive({
@@ -1526,12 +1810,12 @@ server <- function(input, output, session) {
   
   
   output$comparisonPlot <- renderPlot({
-    
+
     generateComparisonplot(results())
     
   })
   
-  
+
   
   output$friendPlot <- renderPlotly({
     generateFriendPlot(input, plot_type = "interactive")
@@ -1570,6 +1854,50 @@ server <- function(input, output, session) {
     ))
   })
   
+  
+  
+  observeEvent(input$show_disclaimer, {
+    showModal(modalDialog(
+      title = "Disclaimer",
+      HTML("<p>The equations and graphs are freely available for all users.</p>
+          <p>This calculator is not intended for treatment/diagnostic purposes, but rather as an additional tool to aid providers and researchers in interpreting CPETs.</p>"),
+      easyClose = TRUE,
+      footer = modalButton("I Understand")
+    ))
+  })
+  
+  
+  # # Load configuration
+  # config <- config::get()
+  
+  # # Use the config settings
+  # email_user <- config$email_user
+  # email_pass <- config$email_pass
+  
+  # observeEvent(input$submit, {
+  #   removeModal()
+    
+  #   tryCatch({
+      
+  #     send.mail(from = email_user,
+  #               to = "cpx.equations@gmail.com",
+  #               subject = "Email from CPX App",
+  #               body = paste("Comment/Question:", input$comment),
+  #               smtp = list(host.name = "smtp.gmail.com", port = 587,
+  #                           user.name = email_user,
+  #                           passwd = email_pass, ssl = TRUE),
+  #               authenticate = TRUE,
+  #               send = TRUE)
+      
+  #     # Show notification on successful email send
+  #     showNotification("Comment sent successfully!", type = "message")
+  #   }, error = function(e) {
+  #     # Handle error, provide feedback
+  #     showNotification("Failed to send comment.", type = "error")
+  #   })
+  # })
+  
+  
   # Store plot selection
   plot_choices <- c("Friend", "Wasserman", "Hansen", "Bruce", "Jones2", "Neder")
   
@@ -1590,6 +1918,8 @@ server <- function(input, output, session) {
     ))
   })
   
+ 
+
   output$download_pdf_modal <- downloadHandler(
     filename = function() {
       paste0("vo2_report_", Sys.Date(), ".html")
@@ -1658,47 +1988,6 @@ server <- function(input, output, session) {
       )
     }
   )
-  observeEvent(input$show_disclaimer, {
-    showModal(modalDialog(
-      title = "Disclaimer",
-      HTML("<p>The equations and graphs are freely available for all users.</p>
-          <p>This calculator is not intended for treatment/diagnostic purposes, but rather as an additional tool to aid providers and researchers in interpreting CPETs.</p>"),
-      easyClose = TRUE,
-      footer = modalButton("I Understand")
-    ))
-  })
-  
-  # 
-  # # Load configuration
-  # config <- config::get()
-  # 
-  # # Use the config settings
-  # email_user <- config$email_user
-  # email_pass <- config$email_pass
-  # 
-  # observeEvent(input$submit, {
-  #   removeModal()
-  #   
-  #   tryCatch({
-  #     
-  #     send.mail(from = email_user,
-  #               to = "cpx.equations@gmail.com",
-  #               subject = "Email from CPX App",
-  #               body = paste("Comment/Question:", input$comment),
-  #               smtp = list(host.name = "smtp.gmail.com", port = 587,
-  #                           user.name = email_user,
-  #                           passwd = email_pass, ssl = TRUE),
-  #               authenticate = TRUE,
-  #               send = TRUE)
-  #     
-  #     # Show notification on successful email send
-  #     showNotification("Comment sent successfully!", type = "message")
-  #   }, error = function(e) {
-  #     # Handle error, provide feedback
-  #     showNotification("Failed to send comment.", type = "error")
-  #   })
-  # })
-  # 
   
   # Show modal on click
   observeEvent(input$open_report_modal, {
@@ -1742,9 +2031,10 @@ server <- function(input, output, session) {
       )
     }
   )
-}
+  }
+  
+  
 shinyApp(ui = ui, server = server)
-
 
 
 
