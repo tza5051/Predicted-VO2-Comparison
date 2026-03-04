@@ -1616,7 +1616,7 @@ J_vs_N
 
 
 
-#### Normaility check for Corrected Dataset----------------------------------------------------------------
+# Normaility check for Corrected Dataset----------------------------------------------------------------
 
 # using corrected values only
 #assess normality
@@ -1648,7 +1648,7 @@ shapiro.test(AccessCPET_Corrected$age)
 
 
 
-########### mean values for paper ##########
+# mean values for paper -----
 
 AccessCPET %>% 
   select(c(
@@ -1656,6 +1656,8 @@ AccessCPET %>%
     Mode,
     age,
     bmi,
+    height_cm,
+    weight_kg,
     Race_Combined,
     ethnicity
   )) %>% 
@@ -1761,7 +1763,7 @@ Access_Interpertation_wide_Corrected_85 %>%
 Access_Corrected_Tidy_FORanalaysis$Equation <- factor(Access_Corrected_Tidy_FORanalaysis$Equation)
 
 
-##### MAIN ANALYSIS #####
+# MAIN ANALYSIS ----
 # non-parametric test for repeated measures (Friedman)
 
 friedman.test(Predicted ~ Equation | Subject_ID, data = Access_Corrected_Tidy_FORanalaysis)
@@ -1922,7 +1924,7 @@ ggplot(melt(kappa_matrix85), aes(x = Var1, y = Var2, fill = value))+
 
 
 
-#### Trying to understand what drives the differences:  ------------------------
+## Trying to understand what drives the differences:  ------------------------
 
 # goal here is to see what is different 
 # all possible pairwise comparisons
@@ -2811,6 +2813,45 @@ Violin_Pred <- Access_Percent_predicted_tidy_Corrected %>%
   )
 
 
+# Summary info for labels
+below80_lab <- tibble::tribble(
+  ~Equation,    ~label,
+  "FRIEND",     "158 (52%)",
+  "Wasserman",  "218 (71%)",
+  "Hansen",     "128 (42%)",
+  "Bruce",      "202 (66%)",
+  "Jones",      "192 (63%)",
+  "Neder",      "81 (27%)"
+)
+
+Violin_Percent <- Access_Percent_predicted_tidy_Corrected %>% 
+  filter(Equation != "Measured") %>% 
+  ggplot(aes(x = Equation, y = Percent.Predicted)) +
+  geom_violindot(aes(fill = Equation),
+                 binwidth = 5, dots_size = 0.1,
+                 color_dots = "black", fill_dots = "black") +
+  # dashed line at 80% predicted
+  geom_hline(yintercept = 80, linetype = "dashed", color = "red") +
+  # text above each violin: n (%) < 80
+  geom_text(
+    data = below80_lab,
+    aes(x = Equation, y = 160, label = label),  # adjust y as needed
+    inherit.aes = FALSE,
+    vjust = 0,
+    size = 5
+  ) +
+  theme_classic() +
+  scale_fill_jco() +
+  labs(y = "Percent Predicted", x = "") +
+  theme(
+    legend.position = "none",
+    axis.title = element_text(size = 16),
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 14),
+    axis.text = element_text(size = 14)
+  )
+
+
 # Figure 1 of paper: Violin plot 
 Violin_Percent <- Access_Percent_predicted_tidy_Corrected %>% 
   filter(Equation != "Measured") %>% 
@@ -2830,14 +2871,14 @@ Violin_Percent <- Access_Percent_predicted_tidy_Corrected %>%
 
 Fig1 <- (Violin_Pred / Violin_Percent) 
 
-ggsave("Figure1.tiff", plot = Fig1, width = 8, height = 7, units = "in", dpi = 900, device = "tiff")
+ggsave("Figure1.tiff", plot = Fig1, width = 8, height = 7, units = "in", dpi = 300, device = "tiff")
 
 
 # Figure 2
 
 Fig2 <- F_vs_W
 
-ggsave("Figure2.tiff", plot = Fig2, width = 6.5, height = 5.5, units = "in", dpi = 900, device = "tiff")
+ggsave("Figure2.tiff", plot = Fig2, width = 6.5, height = 5.5, units = "in", dpi = 300, device = "tiff")
 
 
 
@@ -3946,7 +3987,7 @@ Access_Corrected_Tidy_FORanalaysis %>%
     digits = all_continuous() ~ 2
   ) 
 
-##### AI Calcuations
+# AI Calcuations ------
 #looking at the magnitiude of the change between equation
 # bringing in new race informaiton
 
@@ -4912,7 +4953,9 @@ results_df.TreadCorrected %>%
 
 
 
-##### Variability Model Corrected ######
+##### Variability Model Corrected ###### 
+
+## WHATS IN THE PAPER
 
 AccessCPET_Corrected <- AccessCPET_Corrected %>% 
   mutate(
@@ -5660,3 +5703,216 @@ plot_combo <- plot_grid(
 # The ggsave function from ggplot2 works well with cowplot output
 ggsave("Figure5.tiff", plot = plot_combo, width = 7, height = 8, dpi = 600, units = "in")
 
+
+# Reviewer Comments ------------------------------------------------------
+
+## getting mmrc for all vets ----
+
+# using repo data and filtering based on ID
+
+# bringing in PDCEN and clinical dyspnea rating
+
+wriisc_clinical <- 
+read.csv(
+  "R:/Active_Projects/1818310_Falvo_DataRepository/sensitive/Feeder Study Raw Data/WRIISC CLINCIAL/PrePDCEN_Clinical_DataBase_2025-05-29.csv"
+)
+
+wriisc_clinical <- wriisc_clinical |> 
+  select(
+    Subject_ID = WRIISCID,
+    sym_sob) |> 
+  filter(Subject_ID %in% IDS)
+
+
+wriisc_clinical$Subject_ID <- as.character(wriisc_clinical$Subject_ID)
+
+PDCEN_Resp <- 
+  redcap_read_oneshot(
+    redcap_uri = "https://varedcap.rcp.vaec.va.gov/redcap/api/",
+    token = "32D4DD3A904549F2A755EDFFB19A53A9", # personal token needed here,
+    fields = c('wriisc_id', 'pdcen_site'),
+    forms = "respiratory_symptoms",
+    raw_or_label_headers = "raw",
+    events = "initial_contact_arm_1"
+  ) 
+
+PDCEN_Resp <- PDCEN_Resp$data
+PDCEN_Resp <- as.tibble(PDCEN_Resp)
+
+PDCEN_Resp <- PDCEN_Resp |> 
+  select(
+  Subject_ID = wriisc_id,
+  mmrc_dyspnea) |> 
+  filter(Subject_ID %in% IDS)
+
+PDCEN_Resp <- PDCEN_Resp |> 
+  mutate(
+    sym_sob = case_when(
+      mmrc_dyspnea >= 2 ~ "Yes",
+      is.na(mmrc_dyspnea) ~ NA_character_,
+      TRUE ~ "No"
+    )
+  )
+
+
+Sym_Sob <- bind_rows(PDCEN_Resp,wriisc_clinical)
+
+Sym_Sob |> 
+  filter(duplicated(Sym_Sob$Subject_ID)) |> 
+  pull(Subject_ID)
+
+Sym_Sob <- Sym_Sob |> 
+  distinct(Sym_Sob$Subject_ID, .keep_all = TRUE)
+
+setdiff(IDS, Sym_Sob$Subject_ID)
+
+## Getting nadir ----
+
+
+
+# pulling back in cpet from odc and filtering for just nadier and subject ID:
+
+# 1) get all the raw cpet data loaded in 
+
+# this includes all clinical cpets that were compelted in NJ. Need to filter for those that did Bike only
+# empty file:
+CPET_BxB <- data.frame()
+
+# file path to where all the files are located
+filepath <- "R:/WRIISC/Clinical/Data/STUDY - Pulmonary/DATA - ANALYSIS/Clinical Database Management/CPET Data/Raw Data/Clinical Raw Files"
+
+
+# getting file names
+CPET_raw_filesnames <- list.files(filepath, pattern = "\\.(xlsx|xls|xlsm)")
+CPET_raw_filesnames <- CPET_raw_filesnames[!grepl("~", CPET_raw_filesnames)]
+
+# script to open each subject and get the data needed
+for (i in CPET_raw_filesnames) {
+
+#Sheet 1 info
+CPETSheet1 <- read_excel(paste0(filepath, "/", i), sheet = 1, col_names = F)
+
+Sub_test <- CPETSheet1 |> 
+  select(`...4`,`...5`) |> 
+  drop_na() |> 
+  pivot_wider(names_from =  `...4`, values_from =`...5`) |> 
+  mutate(Subject_ID = substr(gsub("[^0-9]",'',i),start = 1, stop = 5))
+
+Sub_info <- read_excel(paste0(filepath, "/", i))
+  
+col_start <- which(Sub_info[1, ] == "s" | Sub_info[1, ] == "hh:mm:ss")
+if(length(col_start) == 0) {
+  col_start <- 10
+}
+
+# Subset to keep columns from col_start onward
+Sub_info <- Sub_info[, col_start:ncol(Sub_info)]
+
+# Remove row 2 and row 3 (keeping everything except those rows)
+# Remembering that row 1 is now the header from read_excel
+Sub_info <- Sub_info[-c(1,2), ]
+
+Sub_info <- Sub_info |> 
+  select( `VE/VCO2`) |> 
+  mutate(across(c("VE/VCO2"), as.numeric))
+
+  
+# if("Speed" %in% names(Sub_info)) {
+#     Sub_info <- Sub_info |> 
+#       select(t, Rf, HR, VO2, VCO2, `VE/VCO2`, VE,PeCO2, PetCO2, VT, Phase, Speed) |> 
+#       mutate(across(c("t", "Rf", "HR", "VO2","VCO2","VE/VCO2", "VE", "PeCO2", "PetCO2", "VT", "Speed"), as.numeric))
+#   } else if ("RealPower" %in% names(Sub_info)) {
+#     Sub_info <- Sub_info |> 
+#       select(t, Rf, HR, VO2, VCO2, `VE/VCO2`, VE,PeCO2, PetCO2, VT, Phase, Watts = RealPower) |> 
+#       mutate(across(c("t", "Rf", "HR", "VO2","VCO2","VE/VCO2", "VE", "PeCO2", "PetCO2", "VT", "Watts"), as.numeric))
+#   } else if ("Power" %in% names(Sub_info)) {
+#     Sub_info <- Sub_info |> 
+#       select(t, Rf, HR, VO2, VCO2, `VE/VCO2`, VE,PeCO2, PetCO2, VT, Phase, Watts = Power) |> 
+#       mutate(across(c("t", "Rf", "HR", "VO2","VCO2","VE/VCO2", "VE", "PeCO2", "PetCO2", "VT", "Watts"), as.numeric))
+#   } else {
+#     stop("Neither power or Speed is here")
+#   }
+
+Sub_info <- Sub_info |> 
+  mutate(Subject_ID = substr(gsub("[^0-9]",'',i),start = 1, stop = 5))
+  
+
+CPET_data <- Sub_test |> 
+  left_join(Sub_info, by = "Subject_ID")
+  
+
+ #binding to master
+CPET_BxB <- bind_rows(CPET_BxB, CPET_data)
+  
+}
+
+# removing recovery data
+CPET_BxB <- CPET_BxB |>   
+  select(Subject_ID, 'VE/VCO2')
+
+
+Clincal_nadir <- CPET_BxB |> 
+  group_by(Subject_ID) |> 
+summarise(
+    min_vevco2 = min(`VE/VCO2`, na.rm = TRUE)
+  )
+
+# getting PDCEN nadir
+
+PDCEN_nadir <- 
+  redcap_read_oneshot(
+    redcap_uri = "https://varedcap.rcp.vaec.va.gov/redcap/api/",
+    token = "8B34E09C695DDE92DE8F0D1E43880441", # personal token needed here,
+    fields ='subject_id',
+    forms = c("patient_information","cpet"),
+    raw_or_label_headers = "raw"
+  ) 
+
+PDCEN_nadir <- PDCEN_nadir$data
+PDCEN_nadir <-  as.tibble(PDCEN_nadir)
+
+PDCEN_nadir <- PDCEN_nadir |> 
+  select(
+    Subject_ID = subject_id,
+    min_vevco2 = ve_vco2_nadir
+  )
+
+PDCEN_nadir$min_vevco2 <- as.numeric(PDCEN_nadir$min_vevco2)
+PDCEN_nadir$Subject_ID <- as.character(PDCEN_nadir$Subject_ID)
+Clincal_nadir$Subject_ID <- as.character(Clincal_nadir$Subject_ID)
+
+Nadir_values <- bind_rows(PDCEN_nadir, Clincal_nadir)
+
+Nadir_values <- Nadir_values |> 
+  filter(
+    Subject_ID %in% IDS
+  )
+
+setdiff(IDS, Nadir_values$Subject_ID) 
+
+Nadir_values |> 
+  filter(duplicated(Nadir_values$Subject_ID)) |> 
+  pull(Subject_ID)
+
+Nadir_values <- Nadir_values |> 
+  distinct(Nadir_values$Subject_ID, .keep_all = TRUE)
+
+IQR(Nadir_values$min_vevco2, na.rm = TRUE)
+
+
+Nadir_values %>% 
+  select(c(
+    min_vevco2
+  )) %>% 
+  tbl_summary(    
+    statistic = list(
+    all_categorical() ~ "{n} / {N} ({p}%)"),
+  digits = all_continuous() ~ 2,) %>% 
+  add_n()
+
+
+# site level plot
+
+AccessCPET |> 
+ggplot() +
+  geom_violin(aes(x = pdcen_site, y = VO2_peak.actual))
